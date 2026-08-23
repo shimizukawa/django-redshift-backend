@@ -1,7 +1,9 @@
 import inspect
+from importlib.metadata import version
 
 import pytest
 import redshift_connector
+from packaging.version import Version
 
 from driver_tests.option_contract import (
     REQUIRED_DRIVER_OPTIONS,
@@ -128,21 +130,217 @@ def test_authentication_modes_map_django_user_to_the_documented_driver_field(
     assert build_connect_kwargs(settings) == expected
 
 
-def test_documented_identity_provider_mode_does_not_require_password_credentials():
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        (
+            {
+                "NAME": "warehouse",
+                "HOST": "redshift.example",
+                "OPTIONS": {
+                    "credentials_provider": "IdpTokenAuthPlugin",
+                    "token": "identity-center-subject-token",
+                    "token_type": "SUBJECT_TOKEN",
+                },
+            },
+            {
+                "database": "warehouse",
+                "host": "redshift.example",
+                "credentials_provider": "IdpTokenAuthPlugin",
+                "token": "identity-center-subject-token",
+                "token_type": "SUBJECT_TOKEN",
+            },
+        ),
+        (
+            {
+                "NAME": "warehouse",
+                "HOST": "redshift.example",
+                "OPTIONS": {
+                    "credentials_provider": "BrowserIdcAuthPlugin",
+                    "issuer_url": "https://example.awsapps.com/start",
+                    "idc_region": "ap-northeast-1",
+                },
+            },
+            {
+                "database": "warehouse",
+                "host": "redshift.example",
+                "credentials_provider": "BrowserIdcAuthPlugin",
+                "issuer_url": "https://example.awsapps.com/start",
+                "idc_region": "ap-northeast-1",
+            },
+        ),
+        (
+            {
+                "NAME": "warehouse",
+                "HOST": "redshift.example",
+                "USER": "okta-user@example.com",
+                "PASSWORD": "okta-password",
+                "OPTIONS": {
+                    "iam": True,
+                    "cluster_identifier": "warehouse-cluster",
+                    "credentials_provider": "OktaCredentialsProvider",
+                    "idp_host": "example.okta.com",
+                    "app_id": "app-id",
+                    "app_name": "amazon_aws",
+                },
+            },
+            {
+                "database": "warehouse",
+                "host": "redshift.example",
+                "user": "okta-user@example.com",
+                "password": "okta-password",
+                "iam": True,
+                "cluster_identifier": "warehouse-cluster",
+                "credentials_provider": "OktaCredentialsProvider",
+                "idp_host": "example.okta.com",
+                "app_id": "app-id",
+                "app_name": "amazon_aws",
+            },
+        ),
+    ],
+    ids=("idp-token-direct", "browser-idc", "legacy-okta-iam"),
+)
+def test_supported_provider_families_map_credentials_by_documented_mode(
+    settings, expected
+):
+    assert build_connect_kwargs(settings) == expected
+
+
+def test_idp_token_default_credential_chain_is_version_bounded():
+    settings = {
+        "NAME": "warehouse",
+        "HOST": "redshift.example",
+        "OPTIONS": {"credentials_provider": "IdpTokenAuthPlugin"},
+    }
+    if Version(version("redshift-connector")) < Version("2.1.16"):
+        with pytest.raises(ValueError, match="2.1.16"):
+            build_connect_kwargs(settings)
+    else:
+        assert build_connect_kwargs(settings) == {
+            "database": "warehouse",
+            "host": "redshift.example",
+            "credentials_provider": "IdpTokenAuthPlugin",
+        }
+
+
+@pytest.mark.parametrize("missing", ["NAME", "HOST"])
+def test_provider_modes_require_database_and_host_before_connect(missing):
     settings = {
         "NAME": "warehouse",
         "HOST": "redshift.example",
         "OPTIONS": {
             "credentials_provider": "IdpTokenAuthPlugin",
-            "token": "identity-center-token",
+            "token": "subject-token",
+            "token_type": "SUBJECT_TOKEN",
         },
     }
-    assert build_connect_kwargs(settings) == {
-        "database": "warehouse",
-        "host": "redshift.example",
-        "credentials_provider": "IdpTokenAuthPlugin",
-        "token": "identity-center-token",
+    del settings[missing]
+    with pytest.raises(ValueError, match=missing):
+        build_connect_kwargs(settings)
+
+
+@pytest.mark.parametrize(
+    ("options", "standard", "message"),
+    [
+        ({"credentials_provider": "ArbitraryPlugin"}, {}, "ArbitraryPlugin"),
+        (
+            {"credentials_provider": "IdpTokenAuthPlugin", "iam": True},
+            {},
+            "iam",
+        ),
+        (
+            {
+                "credentials_provider": "IdpTokenAuthPlugin",
+                "token": "subject-token",
+            },
+            {},
+            "token_type",
+        ),
+        (
+            {
+                "credentials_provider": "IdpTokenAuthPlugin",
+                "token": "subject-token",
+                "token_type": "ACCESS_TOKEN",
+            },
+            {},
+            "SUBJECT_TOKEN",
+        ),
+        (
+            {
+                "credentials_provider": "IdpTokenAuthPlugin",
+                "token": "subject-token",
+                "token_type": "SUBJECT_TOKEN",
+            },
+            {"USER": "conflict"},
+            "USER",
+        ),
+        (
+            {
+                "credentials_provider": "BrowserIdcAuthPlugin",
+                "idc_region": "ap-northeast-1",
+            },
+            {},
+            "issuer_url",
+        ),
+        (
+            {
+                "credentials_provider": "BrowserIdcAuthPlugin",
+                "issuer_url": "https://example.awsapps.com/start",
+                "idc_region": "ap-northeast-1",
+                "token": "wrong-family",
+            },
+            {},
+            "token",
+        ),
+        (
+            {
+                "credentials_provider": "OktaCredentialsProvider",
+                "cluster_identifier": "warehouse-cluster",
+                "idp_host": "example.okta.com",
+                "app_id": "app-id",
+                "app_name": "amazon_aws",
+            },
+            {"USER": "okta-user", "PASSWORD": "okta-password"},
+            "iam",
+        ),
+        (
+            {
+                "credentials_provider": "OktaCredentialsProvider",
+                "iam": True,
+                "cluster_identifier": "warehouse-cluster",
+                "app_id": "app-id",
+                "app_name": "amazon_aws",
+            },
+            {"USER": "okta-user", "PASSWORD": "okta-password"},
+            "idp_host",
+        ),
+        (
+            {
+                "credentials_provider": "OktaCredentialsProvider",
+                "iam": True,
+                "cluster_identifier": "warehouse-cluster",
+                "idp_host": "example.okta.com",
+                "app_id": "app-id",
+                "app_name": "amazon_aws",
+                "token": "wrong-family",
+            },
+            {"USER": "okta-user", "PASSWORD": "okta-password"},
+            "token",
+        ),
+        ({"token": "orphan-token"}, {}, "credentials_provider"),
+    ],
+)
+def test_incomplete_or_cross_family_provider_settings_fail_before_connect(
+    options, standard, message
+):
+    settings = {
+        "NAME": "warehouse",
+        "HOST": "redshift.example",
+        "OPTIONS": options,
+        **standard,
     }
+    with pytest.raises(ValueError, match=message):
+        build_connect_kwargs(settings)
 
 
 @pytest.mark.parametrize(
