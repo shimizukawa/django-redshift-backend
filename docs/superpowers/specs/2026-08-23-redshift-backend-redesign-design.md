@@ -28,7 +28,8 @@ The design was checked against these local Django sources:
 
 ## Goals
 
-- Support Django 5.2 LTS and Django 6.x.
+- Support Django 4.2.30 as a compatibility bridge for existing users, plus
+  Django 5.2 LTS and Django 6.x as normally supported releases.
 - Replace psycopg2 with AWS's `redshift_connector` after an explicit adoption
   investigation.
 - Implement the backend from `django.db.backends.base` rather than inheriting
@@ -44,7 +45,8 @@ The design was checked against these local Django sources:
 
 ## Non-goals
 
-- Supporting Django 4.2 in the redesigned major version.
+- Providing upstream security maintenance for the end-of-life Django 4.2
+  series, or supporting Django releases older than 4.2.30.
 - Retaining psycopg2 as an alternative runtime driver.
 - Maintaining a psycopg2 compatibility adapter around `redshift_connector`.
 - Inheriting from or copying a complete Django PostgreSQL backend.
@@ -55,16 +57,26 @@ The design was checked against these local Django sources:
 
 ## Supported version matrix
 
-The first redesigned release declares `Django>=5.2.8,<6.2` and
-`requires-python>=3.10`. Its required CI matrix is:
+The first redesigned release declares
+`Django>=4.2.30,<6.2,!=5.0.*,!=5.1.*` and `requires-python>=3.10`. Its required
+CI matrix is:
 
+- Django 4.2.30 on Python 3.10, 3.11, and 3.12.
 - Django 5.2 on Python 3.10, 3.11, 3.12, 3.13, and 3.14.
 - Django 6.0 on Python 3.12, 3.13, and 3.14.
 - Django 6.1 on Python 3.12, 3.13, and 3.14.
 
-These combinations follow Django's published compatibility: Django 5.2.8 and
-later support Python 3.10 through 3.14, while Django 6.0 and 6.1 support Python
-3.12 through 3.14.
+These combinations follow Django's published compatibility: Django 4.2.30
+supports Python 3.8 through 3.12, Django 5.2.8 and later support Python 3.10
+through 3.14, and Django 6.0 and 6.1 support Python 3.12 through 3.14. The
+backend's Python floor limits the Django 4.2 jobs to Python 3.10 through 3.12.
+
+Django 4.2 support is an explicitly bounded compatibility bridge because the
+current backend advertises 4.2 support but has known failures on that series.
+It does not imply that this project supplies Django security fixes. A later
+release may drop 4.2 after an announced support decision; the isolated 4.2
+schema compatibility module, its selection branch, and its dedicated tests
+must then be removable together.
 
 Django's `main` branch is tested on Python 3.14 as a non-blocking early-warning
 job and is not a supported release target. A future Django 6.x minor is not
@@ -108,6 +120,9 @@ Redshift components.
   and conversion.
 - `schema.py`: Redshift DDL, table/column alteration workarounds, `DISTKEY`, and
   `SORTKEY` generation.
+- `schema_django42.py`: only schema-editor overrides that tests prove are
+  required by Django 4.2. `base.py` selects this class only on Django 4.2; all
+  later supported versions use the common class from `schema.py`.
 - `introspection.py`: Redshift-safe catalog queries for tables, columns,
   relations, keys, and constraints.
 - `client.py`: the small, independent `psql` implementation required to retain
@@ -121,7 +136,14 @@ Redshift components.
 a correction. No separate compiler, validation, or version-wide compatibility
 module is introduced initially. Django's default compiler and validation class
 are used. Version-specific code is added only when tests prove that the same
-implementation cannot satisfy both Django 5.2 and 6.x.
+implementation cannot satisfy all supported Django versions.
+
+The Django 4.2 schema boundary is intentionally deletion-oriented. Common
+Redshift behavior remains in `schema.py`; `schema_django42.py` must contain no
+5.2-or-later behavior and must override only the smallest test-proven surface.
+The version selection has a removal comment naming the 4.2-only tests that
+protect it. Dropping Django 4.2 consists of deleting that module, the single
+selection branch, and those tests rather than untangling inline version checks.
 
 ### Django API boundary
 
@@ -316,12 +338,17 @@ or limitation that the redesign fixes.
   objects.
 - Settings mapping and secret-redaction tests.
 - Connection lifecycle, transaction, autocommit, exception, and health tests.
-- Django 5.2 and supported Django 6.x operation signature tests.
+- Django 4.2.30, Django 5.2, and supported Django 6.x operation signature
+  tests.
+- Schema-editor selection tests proving that Django 4.2 alone uses
+  `schema_django42.py`, while later versions use the common implementation.
 - A regression test reproducing #171 through Django's `Trunc` expression.
 - Feature-flag tests that start from Django base defaults and opt in only to
   verified Redshift features.
 - SQL generation golden tests for DDL and ORM queries.
 - Existing migration tests adapted to the supported Django APIs.
+- Migration-corpus and schema golden tests on every supported Django minor,
+  with any approved version-specific SQL difference recorded explicitly.
 - Database-free `collect_sql=True` and `sqlmigrate`-equivalent tests.
 - Migration import, deconstruction, graph, plan, and `makemigrations --check`
   tests. Migration graph and SQL collection must not query applied-migration
@@ -401,8 +428,11 @@ The redesign is complete when:
 
 - The driver investigation records GO and every adoption criterion is covered
   by evidence.
-- Django 5.2 and the supported Django 6.x matrix pass without the vendored
-  backend.
+- Django 4.2.30, Django 5.2, and the supported Django 6.x matrix pass without
+  the vendored backend.
+- Every Django 4.2-only schema override is isolated in `schema_django42.py` and
+  covered by a dedicated test, so the module, selection branch, and tests can
+  be deleted together when 4.2 support ends.
 - The #171 regression passes through Django ORM APIs.
 - Existing public imports and migrations remain valid.
 - The migration compatibility gates report no upgrade-induced model or schema
