@@ -1,6 +1,8 @@
 import inspect
+from importlib.metadata import version
 
 import redshift_connector
+from packaging.version import Version
 
 STANDARD_SETTING_MAP = {
     "NAME": "database",
@@ -9,6 +11,19 @@ STANDARD_SETTING_MAP = {
 }
 DRIVER_SSLMODES = {"verify-ca", "verify-full"}
 DBSHELL_SSLMODES = {"disable", "allow", "prefer", "require", *DRIVER_SSLMODES}
+IDC_PROVIDERS = {"IdpTokenAuthPlugin", "BrowserIdcAuthPlugin"}
+LEGACY_IAM_PROVIDERS = {"OktaCredentialsProvider"}
+SUPPORTED_CREDENTIALS_PROVIDERS = IDC_PROVIDERS | LEGACY_IAM_PROVIDERS
+IDC_TOKEN_OPTIONS = {
+    "token",
+    "token_type",
+    "access_key_id",
+    "secret_access_key",
+    "session_token",
+}
+BROWSER_IDC_OPTIONS = {"issuer_url", "idc_region", "idc_client_display_name"}
+OKTA_OPTIONS = {"idp_host", "app_id", "app_name"}
+PROVIDER_ONLY_OPTIONS = {"token", "token_type"} | BROWSER_IDC_OPTIONS | OKTA_OPTIONS
 REQUIRED_DRIVER_OPTIONS = {
     "user",
     "database",
@@ -100,11 +115,97 @@ def _require_nonempty(settings, name):
     return value
 
 
+def _reject_nonempty(driver, names, provider):
+    conflicts = sorted(name for name in names if driver.get(name) not in (None, ""))
+    if conflicts:
+        raise ValueError(
+            f"{provider} does not accept option(s): {', '.join(conflicts)}"
+        )
+
+
+def _validate_provider_mode(driver, settings_dict):
+    provider = driver.get("credentials_provider")
+    if provider in (None, ""):
+        orphaned = sorted(
+            name for name in PROVIDER_ONLY_OPTIONS if driver.get(name) not in (None, "")
+        )
+        if orphaned:
+            raise ValueError(
+                f"credentials_provider is required for option(s): {', '.join(orphaned)}"
+            )
+        return None
+    if provider not in SUPPORTED_CREDENTIALS_PROVIDERS:
+        raise ValueError(
+            f"Unsupported credentials_provider for this investigation: {provider}"
+        )
+    for name in ("NAME", "HOST"):
+        _require_nonempty(settings_dict, name)
+
+    if provider in IDC_PROVIDERS:
+        if driver.get("iam") is True:
+            raise ValueError(f"{provider} requires iam=False")
+        for name in ("USER", "PASSWORD"):
+            if settings_dict.get(name) not in (None, ""):
+                raise ValueError(f"{name} conflicts with {provider}")
+
+    if provider == "IdpTokenAuthPlugin":
+        _reject_nonempty(driver, BROWSER_IDC_OPTIONS | OKTA_OPTIONS, provider)
+        explicit_aws = {
+            name for name in ("access_key_id", "secret_access_key", "session_token")
+            if driver.get(name) not in (None, "")
+        }
+        if explicit_aws:
+            raise ValueError(
+                "IdpTokenAuthPlugin explicit AWS credentials are not supported "
+                "by this investigation"
+            )
+        token = driver.get("token")
+        token_type = driver.get("token_type")
+        if token not in (None, "") or token_type not in (None, ""):
+            if token in (None, ""):
+                raise ValueError("token is required when token_type is provided")
+            if token_type in (None, ""):
+                raise ValueError("token_type is required when token is provided")
+            if token_type != "SUBJECT_TOKEN":
+                raise ValueError(
+                    "IdpTokenAuthPlugin direct token requires token_type=SUBJECT_TOKEN"
+                )
+        elif Version(version("redshift-connector")) < Version("2.1.16"):
+            raise ValueError(
+                "IdpTokenAuthPlugin default credential chain requires "
+                "redshift-connector>=2.1.16"
+            )
+        return "native_idc"
+
+    if provider == "BrowserIdcAuthPlugin":
+        _reject_nonempty(driver, IDC_TOKEN_OPTIONS | OKTA_OPTIONS, provider)
+        for name in ("issuer_url", "idc_region"):
+            if driver.get(name) in (None, ""):
+                raise ValueError(f"{name} is required for BrowserIdcAuthPlugin")
+        return "native_idc"
+
+    if driver.get("iam") is not True:
+        raise ValueError(f"{provider} requires iam=True")
+    _reject_nonempty(
+        driver,
+        IDC_TOKEN_OPTIONS | BROWSER_IDC_OPTIONS | {"profile", "db_user"},
+        provider,
+    )
+    if driver.get("is_serverless") is True:
+        raise ValueError(f"{provider} Serverless mode is not investigated")
+    for name in ("cluster_identifier", "idp_host", "app_id", "app_name"):
+        if driver.get(name) in (None, ""):
+            raise ValueError(f"{name} is required for {provider}")
+    _require_nonempty(settings_dict, "USER")
+    _require_nonempty(settings_dict, "PASSWORD")
+    return "legacy_iam"
+
+
 def build_connect_kwargs(settings_dict):
     driver, _ = classify_options(settings_dict.get("OPTIONS", {}))
     iam = driver.get("iam") is True
     is_serverless = driver.get("is_serverless") is True
-    uses_identity_provider = driver.get("credentials_provider") not in (None, "")
+    provider_mode = _validate_provider_mode(driver, settings_dict)
 
     if driver.get("profile") not in (None, "") and not iam:
         raise ValueError("profile requires iam=True")
@@ -114,7 +215,12 @@ def build_connect_kwargs(settings_dict):
     ) and not is_serverless:
         raise ValueError("Serverless options require is_serverless=True")
 
-    if iam:
+    if provider_mode == "legacy_iam":
+        driver["user"] = settings_dict["USER"]
+        driver["password"] = settings_dict["PASSWORD"]
+    elif provider_mode == "native_idc":
+        pass
+    elif iam:
         user = _require_nonempty(settings_dict, "USER")
         if settings_dict.get("PASSWORD") not in (None, ""):
             raise ValueError("PASSWORD conflicts with IAM authentication")
@@ -140,17 +246,8 @@ def build_connect_kwargs(settings_dict):
             raise ValueError("is_serverless=True requires iam=True")
         if driver.get("db_user") not in (None, ""):
             raise ValueError("OPTIONS['db_user'] requires IAM authentication")
-        if uses_identity_provider:
-            for setting_name, driver_name in (
-                ("USER", "user"),
-                ("PASSWORD", "password"),
-            ):
-                value = settings_dict.get(setting_name)
-                if value not in (None, ""):
-                    driver[driver_name] = value
-        else:
-            driver["user"] = _require_nonempty(settings_dict, "USER")
-            driver["password"] = _require_nonempty(settings_dict, "PASSWORD")
+        driver["user"] = _require_nonempty(settings_dict, "USER")
+        driver["password"] = _require_nonempty(settings_dict, "PASSWORD")
 
     for setting_name, driver_name in STANDARD_SETTING_MAP.items():
         value = settings_dict.get(setting_name)

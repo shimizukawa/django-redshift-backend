@@ -98,8 +98,9 @@ All must-pass contracts succeeded on public objects imported from
   nine names without an adapter.
 - The public `connect()` signature exposes password authentication; access key,
   secret key, and session token; AWS profile and IAM modes; provisioned cluster
-  identification; Serverless account/workgroup mode; and IdP pass-through via
-  `credentials_provider`, `web_identity_token`, and `token`.
+  identification; Serverless account/workgroup mode; and the bounded provider
+  modes below. Arbitrary provider class paths are not part of the investigated
+  contract.
 - Public synchronous `Connection` methods cover `cursor()`, `commit()`,
   `rollback()`, `close()`, and context management. Public `Cursor` methods and
   properties cover `execute()`, `executemany()`, fetch methods, `close()`,
@@ -127,10 +128,31 @@ All must-pass contracts succeeded on public objects imported from
   requires `is_serverless=True`, `serverless_acct_id`, and
   `serverless_work_group`, and rejects a simultaneous `cluster_identifier`.
   These checks construct and validate arguments only; they make no AWS calls.
-- A documented `credentials_provider` mode remains a separate pass-through:
-  providers such as `IdpTokenAuthPlugin` can omit `USER` and `PASSWORD`, as in
-  AWS's public example, while any non-empty standard values are mapped to the
-  corresponding public driver arguments.
+- Provider support is deliberately bounded and mode-specific:
+
+  | Provider/mode | `iam` | Required inputs | Django `USER` / `PASSWORD` |
+  | --- | --- | --- | --- |
+  | `IdpTokenAuthPlugin`, direct token | false/omitted | `NAME`, `HOST`, `token`, `token_type=SUBJECT_TOKEN` | must be empty; token authentication supplies identity |
+  | `IdpTokenAuthPlugin`, default AWS credential chain | false/omitted | `NAME`, `HOST`, no token or explicit AWS credential options; connector 2.1.16+ | must be empty |
+  | `BrowserIdcAuthPlugin` | false/omitted | `NAME`, `HOST`, `issuer_url`, `idc_region` | must be empty; browser authentication supplies identity |
+  | `OktaCredentialsProvider`, legacy IAM SAML | true | `NAME`, `HOST`, `cluster_identifier`, `idp_host`, `app_id`, `app_name` | required and mapped to ordinary driver `user` / `password`, not `db_user` |
+
+  AWS's current repository and Identity Center guide require a subject token
+  returned by `GetIdentityCenterAuthToken` for direct token use. Although the
+  older generic configuration page lists `ACCESS_TOKEN` and `EXT_JWT`, this
+  investigation follows the current 2.1.16 repository example and Identity
+  Center guide and accepts only `SUBJECT_TOKEN` for this mode.
+- The default AWS credential provider chain for `IdpTokenAuthPlugin` was added
+  in 2.1.16. The 2.1.14 floor is rejected for that single sub-mode before
+  connect; direct subject-token mode remains available at the floor. Explicit
+  identity-enhanced access-key triples are outside this bounded prototype and
+  are rejected rather than guessed.
+- AWS also documents `AdfsCredentialsProvider`, `AzureCredentialsProvider`,
+  `BrowserAzureCredentialsProvider`, `BrowserAzureOAuth2CredentialsProvider`,
+  `BrowserSamlCredentialsProvider`, and `PingCredentialsProvider`. Their
+  distinct requirements were not exercised here, so this prototype rejects
+  them, fully-qualified/arbitrary provider class paths, provider options without
+  a provider, and cross-family option combinations before connect.
 - An option is passed to the driver only if it is in the public `connect()`
   signature.
 - `passfile`, `service`, `sslrootcert`, `sslcert`, and `sslkey` are retained
@@ -186,10 +208,10 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.14, 5 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.14, 32 passed
+PASS: Python 3.12.13, driver 2.1.14, 48 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.16, 32 passed
+PASS: Python 3.12.13, driver 2.1.16, 48 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 pytest driver_tests/test_django_exceptions.py -q
 PASS: Python 3.12.13, Django 4.2.30, locked driver 2.1.16, 9 passed
@@ -253,8 +275,15 @@ uv --cache-dir .uv-cache run --python PYTHON --project driver_tests --with "DJAN
 
 After this matrix completed, one additional AWS-documented IdP pass-through
 case was added to guard against applying password-mode validation too broadly.
-The final focused metadata, option, and connection/cursor suites passed 40 tests
-on each of 2.1.14 and 2.1.16; the added test is driver- and Django-independent.
+The round-1 focused metadata, option, and connection/cursor suites passed 40
+tests on each of 2.1.14 and 2.1.16.
+
+The round-2 provider-family work is pure AWS-free dictionary validation with no
+Django-version branch. Its final option suite passed 48 tests and its complete
+driver suite passed 65 tests on each of 2.1.14 and 2.1.16 using Django 5.2.8.
+The 15-cell matrix was not rerun because the changed behavior is Django-
+independent and both driver endpoints were explicitly covered; the earlier
+matrix remains the Python/Django compatibility evidence.
 
 Dependency and packaging evidence commands:
 
@@ -288,6 +317,8 @@ top_level.txt names only django_redshift_backend.
 - [AWS Python connector API reference](https://docs.aws.amazon.com/redshift/latest/mgmt/python-api-reference.html)
 - [AWS connector configuration options](https://docs.aws.amazon.com/redshift/latest/mgmt/python-configuration-options.html)
 - [AWS connector examples, including autocommit and context managers](https://docs.aws.amazon.com/redshift/latest/mgmt/python-connect-examples.html)
+- [AWS Python connector identity-provider examples](https://docs.aws.amazon.com/redshift/latest/mgmt/python-connect-identity-provider-plugins.html)
+- [AWS Identity Center direct-token integration](https://docs.aws.amazon.com/redshift/latest/mgmt/identity-center-authentication.html)
 - [Official AWS driver repository](https://github.com/aws/amazon-redshift-python-driver)
 - [Official AWS driver changelog](https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md)
 - [Official AWS driver releases](https://github.com/aws/amazon-redshift-python-driver/releases)
