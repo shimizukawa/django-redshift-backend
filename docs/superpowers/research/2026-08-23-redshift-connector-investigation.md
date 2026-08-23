@@ -1,0 +1,219 @@
+# AWS Redshift Connector Investigation
+
+## Decision
+
+Decision: GO
+
+The public, AWS-free contracts required for the next backend layer pass on both
+the 2.1.14 security floor and the investigated 2.1.16 release. All 15 cells in
+the proposed blocking compatibility matrix also pass when reproduced locally.
+The next layer may therefore adopt the public connector API with
+`redshift-connector>=2.1.14,<3`, without a psycopg2 adapter or a private driver
+API. The stacked PR must still pass the same matrix on GitHub Actions before it
+is merged.
+
+## Candidate and proposed constraint
+
+- Investigated release: 2.1.16, released on 2026-08-03.
+- Security floor: 2.1.14, released on 2026-05-18 and containing the fix for
+  [GHSA-29h4-r29x-hchv](https://github.com/advisories/GHSA-29h4-r29x-hchv).
+- Proposed runtime constraint: `redshift-connector>=2.1.14,<3`.
+- The 2.1.16 wheel declares `Requires-Python >=3.8`. The project matrix covers
+  its supported Python 3.10-3.14 range, with Django's own Python-version bounds
+  applied.
+
+## Maintenance, license, security, and dependencies
+
+The upstream changelog and PyPI history show continued activity: 2.1.14 was
+released on 2026-05-18, 2.1.15 on 2026-06-09, and 2.1.16 on 2026-08-03. As of
+2026-08-23, 2.1.16 is the latest published release.
+
+The locked 2.1.16 wheel has SHA-256
+`6d50ef7c19bf48e0895f8e81636f182bd8d0f3b447f02e9c924e9c52ca8e2cb6`.
+Its core metadata says `License: Apache License 2.0`, but its classifier says
+`License :: OSI Approved :: BSD License`. Direct inspection of the wheel's
+packaged files resolves the substantive license as Apache License 2.0:
+`licenses/LICENSE` contains the complete Apache License, Version 2.0 text, and
+`licenses/NOTICE` contains Amazon's copyright notice. The BSD classifier is
+inconsistent/stale metadata, not a second license in the distribution. This
+discrepancy does not block adoption, but should be reported upstream.
+
+The locked distribution has these direct runtime dependencies:
+
+- `beautifulsoup4>=4.13.5,<5.0.0`
+- `boto3>=1.42.22,<2.0.0`
+- `botocore>=1.12.201,<2.0.0`
+- `lxml>=6.1.0,<7.0.0`
+- `packaging`
+- `pytz>=2020.1`
+- `requests>=2.23.0,<3.0.0`
+- `scramp>=1.2.0,<1.5.0`
+- `setuptools`
+
+`numpy` and `pandas` are declared only for the `full` extra and are not direct
+dependencies of the default installation.
+
+The reviewed security advisories establish both relevant floors:
+
+- [GHSA-r244-wg5g-6w2r](https://github.com/advisories/GHSA-r244-wg5g-6w2r)
+  affects 2.0.872 through 2.1.6 and is fixed in 2.1.7.
+- [GHSA-29h4-r29x-hchv](https://github.com/advisories/GHSA-29h4-r29x-hchv)
+  affects versions through 2.1.13 and is fixed in 2.1.14. This critical fix is
+  why 2.1.14, rather than 2.1.7, is the proposed minimum.
+
+## Must-pass public contracts
+
+All must-pass contracts succeeded on public objects imported from
+`redshift_connector`:
+
+- DB-API level is `2.0`, the default parameter style is `format`, and thread
+  safety is level 1.
+- The complete DB-API/Django exception namespace is present: `Error`,
+  `InterfaceError`, `DatabaseError`, `DataError`, `OperationalError`,
+  `IntegrityError`, `InternalError`, `ProgrammingError`, and
+  `NotSupportedError`. Django's public `DatabaseErrorWrapper` translates all
+  nine names without an adapter.
+- The public `connect()` signature exposes password authentication; access key,
+  secret key, and session token; AWS profile and IAM modes; provisioned cluster
+  identification; Serverless account/workgroup mode; and IdP pass-through via
+  `credentials_provider`, `web_identity_token`, and `token`.
+- Public synchronous `Connection` methods cover `cursor()`, `commit()`,
+  `rollback()`, `close()`, and context management. Public `Cursor` methods and
+  properties cover `execute()`, `executemany()`, fetch methods, `close()`,
+  `description`, and `rowcount`.
+- The investigation harness imports only the public package and public classes.
+  The production backend is unchanged, and no private driver member or
+  psycopg2 compatibility adapter is required by these contracts.
+- Every one of the 15 AWS-free compatibility-matrix cells passed locally at
+  the configured driver version; 14 exercise the 2.1.14 floor and the final
+  smoke cell exercises 2.1.16.
+
+## Connection option crosswalk
+
+- Non-empty standard Django settings `NAME`, `HOST`, `PORT`, `USER`, and
+  `PASSWORD` map to `database`, `host`, `port`, `user`, and `password`, and
+  override duplicate names supplied in `OPTIONS`.
+- An option is passed to the driver only if it is in the public `connect()`
+  signature.
+- `passfile`, `service`, `sslrootcert`, `sslcert`, and `sslkey` are retained
+  only for `dbshell`. `sslmode` is consumed by both the driver and `dbshell`.
+- Legacy psycopg2-only options `options`, `isolation_level`, `cursor_factory`,
+  `connection_factory`, and `client_encoding` are rejected.
+- Any other unknown option fails during classification, before a socket can be
+  opened.
+- Logging redacts all values named `password`, `access_key_id`,
+  `secret_access_key`, `session_token`, `client_secret`,
+  `web_identity_token`, or `token`.
+
+## Explicit limitations and deferred integration checks
+
+`Connection.cursor()` has no public named-cursor argument. Django chunked
+cursors must initially use an ordinary cursor or be explicitly marked
+unsupported.
+
+The following behavior remains unverified until a real Redshift service is
+available: parameter binding; round trips for UUID, Decimal, date, time,
+datetime, timezone, Boolean, JSON, NULL, Redshift-specific, and unknown types;
+savepoint SQL; actual `execute()`, `executemany()`, fetch, and result-metadata
+behavior; connection health after a network failure; `CONN_MAX_AGE`; and IAM,
+IdP, provisioned-cluster, and Serverless authentication/connection behavior.
+
+AWS's public examples state that autocommit is off by default and demonstrate
+setting `Connection.autocommit`. They also demonstrate connection and cursor
+context managers. The public surface exists in both investigated driver
+versions, but these behaviors were not integration-tested here.
+
+## Commands and results
+
+All successful local commands used a workspace-local uv cache because the
+sandbox could not access uv's default host cache. Python 3.12 resolved to
+3.12.13, Python 3.10 to 3.10.20, Python 3.11 to 3.11.14, Python 3.13 to 3.13.3,
+and Python 3.14 to 3.14.0. `Django~=6.0.0` resolved to 6.0.8 and
+`Django~=6.1.0` to 6.1.
+
+Task-specific public contract commands:
+
+```text
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_metadata_contract.py -q
+PASS: Python 3.12.13, driver 2.1.16, 5 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_metadata_contract.py -q
+PASS: Python 3.12.13, driver 2.1.14, 5 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -q
+PASS: Python 3.12.13, driver 2.1.14, 10 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -q
+PASS: Python 3.12.13, driver 2.1.16, 10 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 pytest driver_tests/test_django_exceptions.py -q
+PASS: Python 3.12.13, Django 4.2.30, locked driver 2.1.16, 9 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 pytest driver_tests/test_django_exceptions.py -q
+PASS: Python 3.12.13, Django 5.2.8, locked driver 2.1.16, 9 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with "Django~=6.0.0" pytest driver_tests/test_django_exceptions.py -q
+PASS: Python 3.12.13, Django 6.0.8, locked driver 2.1.16, 9 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_django_exceptions.py -q
+PASS: Python 3.12.13, Django 6.1, locked driver 2.1.16, 9 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connection_cursor_contract.py -q
+PASS: Python 3.12.13, driver 2.1.14, 3 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connection_cursor_contract.py -q
+PASS: Python 3.12.13, driver 2.1.16, 3 passed
+```
+
+Final representative commands:
+
+```text
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 pytest driver_tests -q
+PASS: Python 3.12.13, Django 4.2.30, driver 2.1.14, 27 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 pytest driver_tests -q
+PASS: Python 3.12.13, Django 5.2.8, driver 2.1.14, 27 passed
+
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with "Django~=6.0.0" --with redshift-connector==2.1.14 pytest driver_tests -q
+PASS: Python 3.12.13, Django 6.0.8, driver 2.1.14, 27 passed
+
+uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 pytest driver_tests -q
+PASS: Python 3.14.0, Django 6.1, driver 2.1.16, 27 passed
+```
+
+The complete workflow matrix was then reproduced with this exact command,
+substituting each row below:
+
+```text
+uv --cache-dir .uv-cache run --python PYTHON --project driver_tests --with "DJANGO" --with redshift-connector==DRIVER pytest driver_tests -q
+```
+
+| Python | Django requirement (resolved) | Driver | Result |
+| --- | --- | --- | --- |
+| 3.10 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
+| 3.11 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
+| 3.12 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
+| 3.10 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
+| 3.11 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
+| 3.12 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
+| 3.13 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
+| 3.14 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
+| 3.12 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
+| 3.13 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
+| 3.14 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
+| 3.12 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
+| 3.13 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 27 passed |
+
+## Sources
+
+- [AWS Python connector API reference](https://docs.aws.amazon.com/redshift/latest/mgmt/python-api-reference.html)
+- [AWS connector configuration options](https://docs.aws.amazon.com/redshift/latest/mgmt/python-configuration-options.html)
+- [AWS connector examples, including autocommit and context managers](https://docs.aws.amazon.com/redshift/latest/mgmt/python-connect-examples.html)
+- [Official AWS driver repository](https://github.com/aws/amazon-redshift-python-driver)
+- [Official AWS driver changelog](https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md)
+- [Official AWS driver releases](https://github.com/aws/amazon-redshift-python-driver/releases)
+- [PyPI release metadata and history](https://pypi.org/project/redshift-connector/)
+- [GHSA-r244-wg5g-6w2r](https://github.com/advisories/GHSA-r244-wg5g-6w2r)
+- [GHSA-29h4-r29x-hchv](https://github.com/advisories/GHSA-29h4-r29x-hchv)
