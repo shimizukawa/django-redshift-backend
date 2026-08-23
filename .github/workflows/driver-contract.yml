@@ -1,0 +1,42 @@
+name: Redshift driver contract
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  contract:
+    name: Python ${{ matrix.python }} / ${{ matrix.django }} / driver ${{ matrix.driver }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: "3.10", django: "Django==4.2.30", driver: "2.1.14"}
+          - {python: "3.11", django: "Django==4.2.30", driver: "2.1.14"}
+          - {python: "3.12", django: "Django==4.2.30", driver: "2.1.14"}
+          - {python: "3.10", django: "Django==5.2.8", driver: "2.1.14"}
+          - {python: "3.11", django: "Django==5.2.8", driver: "2.1.14"}
+          - {python: "3.12", django: "Django==5.2.8", driver: "2.1.14"}
+          - {python: "3.13", django: "Django==5.2.8", driver: "2.1.14"}
+          - {python: "3.14", django: "Django==5.2.8", driver: "2.1.14"}
+          - {python: "3.12", django: "Django~=6.0.0", driver: "2.1.14"}
+          - {python: "3.13", django: "Django~=6.0.0", driver: "2.1.14"}
+          - {python: "3.14", django: "Django~=6.0.0", driver: "2.1.14"}
+          - {python: "3.12", django: "Django~=6.1.0", driver: "2.1.14"}
+          - {python: "3.13", django: "Django~=6.1.0", driver: "2.1.14"}
+          - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.14"}
+          - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.16"}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Run public driver contracts
+        run: >-
+          uv run --project driver_tests
+          --with "${{ matrix.django }}"
+          --with "redshift-connector==${{ matrix.driver }}"
+          pytest driver_tests -q
