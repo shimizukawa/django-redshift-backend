@@ -53,6 +53,29 @@ The locked distribution has these direct runtime dependencies:
 `numpy` and `pandas` are declared only for the `full` extra and are not direct
 dependencies of the default installation.
 
+The checked-in `driver_tests/uv.lock` resolves 29 distributions for the complete
+investigation harness (project, pytest tooling, and runtime dependencies). To
+measure the production dependency rather than the test harness, fresh Python
+3.12.13 environments were installed from the public index with only one pinned
+requirement. Both `redshift-connector==2.1.14` and `==2.1.16` resolved to 21
+distributions: the connector plus 20 unique transitive distributions. The
+logical size of all files under `site-packages` was 39,152,756 bytes (37.34 MiB)
+for 2.1.14 and 39,166,415 bytes (37.35 MiB) for 2.1.16 on Windows x86-64.
+These are installed logical sizes, not download, compressed-wheel, or shared uv
+cache sizes, and other platforms can differ.
+
+`uv pip check` reported all 21 packages compatible in both isolated runtime
+environments. The 15 matrix runs also resolved without a dependency conflict;
+their complete test environments contained 28 installed packages on Python
+3.10 and 26 on Python 3.11-3.14. This establishes satisfiable resolutions for
+the proposed Python/Django matrix at the time of investigation, not a guarantee
+against future releases under open transitive constraints.
+
+`pip-audit` reported no known vulnerabilities in either isolated 21-package
+runtime environment on 2026-08-23. The audit queried the resolved Windows
+Python 3.12 package sets; it does not cover future resolutions, optional extras,
+operating-system libraries, or vulnerabilities absent from the audit database.
+
 The reviewed security advisories establish both relevant floors:
 
 - [GHSA-r244-wg5g-6w2r](https://github.com/advisories/GHSA-r244-wg5g-6w2r)
@@ -80,7 +103,8 @@ All must-pass contracts succeeded on public objects imported from
 - Public synchronous `Connection` methods cover `cursor()`, `commit()`,
   `rollback()`, `close()`, and context management. Public `Cursor` methods and
   properties cover `execute()`, `executemany()`, fetch methods, `close()`,
-  `description`, and `rowcount`.
+  context management, `description`, and `rowcount` on both investigated
+  versions.
 - The investigation harness imports only the public package and public classes.
   The production backend is unchanged, and no private driver member or
   psycopg2 compatibility adapter is required by these contracts.
@@ -90,13 +114,34 @@ All must-pass contracts succeeded on public objects imported from
 
 ## Connection option crosswalk
 
-- Non-empty standard Django settings `NAME`, `HOST`, `PORT`, `USER`, and
-  `PASSWORD` map to `database`, `host`, `port`, `user`, and `password`, and
-  override duplicate names supplied in `OPTIONS`.
+- Non-empty standard Django settings `NAME`, `HOST`, and `PORT` map to
+  `database`, `host`, and `port` and override duplicate names supplied in
+  `OPTIONS`.
+- In username/password mode, `USER` and `PASSWORD` map to `user` and
+  `password`. Both are required by the AWS-free prototype.
+- With `iam=True`, `USER` maps to `db_user`, not `user`, and a non-empty
+  `PASSWORD` is rejected as conflicting. An AWS profile is accepted as an IAM
+  credential source; without a profile the connector's default boto3 credential
+  chain remains available.
+- Provisioned IAM mode requires `cluster_identifier`. Serverless IAM mode
+  requires `is_serverless=True`, `serverless_acct_id`, and
+  `serverless_work_group`, and rejects a simultaneous `cluster_identifier`.
+  These checks construct and validate arguments only; they make no AWS calls.
+- A documented `credentials_provider` mode remains a separate pass-through:
+  providers such as `IdpTokenAuthPlugin` can omit `USER` and `PASSWORD`, as in
+  AWS's public example, while any non-empty standard values are mapped to the
+  corresponding public driver arguments.
 - An option is passed to the driver only if it is in the public `connect()`
   signature.
 - `passfile`, `service`, `sslrootcert`, `sslcert`, and `sslkey` are retained
-  only for `dbshell`. `sslmode` is consumed by both the driver and `dbshell`.
+  only for `dbshell`. Driver-side `sslmode` accepts exactly the two values in
+  the AWS connector documentation, `verify-ca` and `verify-full`.
+- The independent `dbshell` classifier preserves psql's `disable`, `allow`,
+  `prefer`, `require`, `verify-ca`, and `verify-full` values. A database
+  connection configured with one of the first four legacy modes is rejected
+  before a socket is opened; it is not silently translated or dropped. This is
+  an intentional compatibility impact, while direct dbshell construction can
+  still retain the original psql value.
 - Legacy psycopg2-only options `options`, `isolation_level`, `cursor_factory`,
   `connection_factory`, and `client_encoding` are rejected.
 - Any other unknown option fails during classification, before a socket can be
@@ -141,10 +186,10 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.14, 5 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.14, 10 passed
+PASS: Python 3.12.13, driver 2.1.14, 32 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.16, 10 passed
+PASS: Python 3.12.13, driver 2.1.16, 32 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 pytest driver_tests/test_django_exceptions.py -q
 PASS: Python 3.12.13, Django 4.2.30, locked driver 2.1.16, 9 passed
@@ -169,16 +214,16 @@ Final representative commands:
 
 ```text
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 4.2.30, driver 2.1.14, 27 passed
+PASS: Python 3.12.13, Django 4.2.30, driver 2.1.14, 48 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 5.2.8, driver 2.1.14, 27 passed
+PASS: Python 3.12.13, Django 5.2.8, driver 2.1.14, 48 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with "Django~=6.0.0" --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 6.0.8, driver 2.1.14, 27 passed
+PASS: Python 3.12.13, Django 6.0.8, driver 2.1.14, 48 passed
 
 uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 pytest driver_tests -q
-PASS: Python 3.14.0, Django 6.1, driver 2.1.16, 27 passed
+PASS: Python 3.14.0, Django 6.1, driver 2.1.16, 48 passed
 ```
 
 The complete workflow matrix was then reproduced with this exact command,
@@ -190,21 +235,53 @@ uv --cache-dir .uv-cache run --python PYTHON --project driver_tests --with "DJAN
 
 | Python | Django requirement (resolved) | Driver | Result |
 | --- | --- | --- | --- |
-| 3.10 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
-| 3.11 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
-| 3.12 | `Django==4.2.30` (4.2.30) | 2.1.14 | 27 passed |
-| 3.10 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
-| 3.11 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
-| 3.12 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
-| 3.13 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
-| 3.14 | `Django==5.2.8` (5.2.8) | 2.1.14 | 27 passed |
-| 3.12 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
-| 3.13 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
-| 3.14 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 27 passed |
-| 3.12 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
-| 3.13 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
-| 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 27 passed |
-| 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 27 passed |
+| 3.10 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
+| 3.11 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
+| 3.12 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
+| 3.10 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
+| 3.11 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
+| 3.12 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
+| 3.13 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
+| 3.14 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
+| 3.12 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
+| 3.13 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
+| 3.14 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
+| 3.12 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
+| 3.13 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 48 passed |
+
+After this matrix completed, one additional AWS-documented IdP pass-through
+case was added to guard against applying password-mode validation too broadly.
+The final focused metadata, option, and connection/cursor suites passed 40 tests
+on each of 2.1.14 and 2.1.16; the added test is driver- and Django-independent.
+
+Dependency and packaging evidence commands:
+
+```text
+uv --cache-dir .uv-cache tree --project driver_tests --locked
+PASS: 29-package locked investigation graph; connector 2.1.16 plus 20 unique
+runtime transitives and the project/pytest harness
+
+uv ... venv --python 3.12 RUNTIME_ENV
+uv ... pip install --python RUNTIME_ENV redshift-connector==DRIVER
+uv ... pip check --python RUNTIME_ENV
+PASS for 2.1.14 and 2.1.16: 21 packages resolved and installed; all compatible
+
+pip-audit --path RUNTIME_ENV/Lib/site-packages
+PASS for both isolated runtime environments: no known vulnerabilities found
+
+uv --cache-dir .uv-cache run --with pytest --with pytest-cov --with mock --with django-environ --with psycopg2-binary pytest -q
+PASS: editable root build succeeded; 10 passed, 22 skipped
+
+uv --cache-dir .uv-cache build --out-dir PACKAGE_ARTIFACTS
+PASS: sdist built. The direct wheel build then hit the Windows long-path limit
+in the nested worktree; rebuilding that exact sdist from C:\\tmp\\drb168 succeeded.
+The wheel contains 33 files: 28 under django_redshift_backend, zero under
+driver_tests, and only the production package plus dist-info at top level.
+The sdist contains the tracked investigation sources, while its generated
+top_level.txt names only django_redshift_backend.
+```
 
 ## Sources
 
