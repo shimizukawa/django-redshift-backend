@@ -30,6 +30,13 @@ def test_cursor_exposes_required_dbapi_surface():
     assert parameter_names(cursor.fetchmany) == ("self", "num")
     assert parameter_names(cursor.fetchall) == ("self",)
     assert parameter_names(cursor.close) == ("self",)
+    assert parameter_names(cursor.__enter__) == ("self",)
+    assert parameter_names(cursor.__exit__) == (
+        "self",
+        "exc_type",
+        "exc_value",
+        "traceback",
+    )
     assert isinstance(cursor.description, property)
     assert isinstance(cursor.rowcount, property)
 

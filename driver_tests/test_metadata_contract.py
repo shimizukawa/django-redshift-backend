@@ -41,6 +41,7 @@ def test_dbapi_exception_namespace_is_complete():
         exception = getattr(redshift_connector, name)
         assert issubclass(exception, Exception)
     assert issubclass(redshift_connector.InterfaceError, redshift_connector.Error)
+    assert issubclass(redshift_connector.DatabaseError, redshift_connector.Error)
     for name in DBAPI_EXCEPTIONS[2:]:
         assert issubclass(getattr(redshift_connector, name), redshift_connector.DatabaseError)
 
