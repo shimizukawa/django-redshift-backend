@@ -2,7 +2,9 @@
 
 ## Decision
 
-Decision: GO for username/password authentication only
+Decision: GO
+
+Scope: username/password authentication only.
 
 The public, AWS-free contracts required for a password-only backend layer pass
 on both the 2.1.14 security floor and the investigated 2.1.16 release. All 15
