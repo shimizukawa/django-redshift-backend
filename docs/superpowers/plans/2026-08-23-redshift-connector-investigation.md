@@ -32,6 +32,10 @@ pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
 - Test Django 5.2 on Python 3.10-3.14 and Django 6.0/6.1 on Python 3.12-3.14.
 - Never log or snapshot passwords, access keys, secret keys, session tokens,
   client secrets, web identity tokens, or bearer tokens.
+- Treat username/password as the only authentication mode supported by the
+  initial redesigned release. Inventory public IAM, profile, Serverless, and
+  identity-provider arguments only as non-blocking future-work evidence; do not
+  construct, enable, or claim support for those modes in this investigation.
 - A failed must-pass contract produces NO-GO and stops work before the backend
   foundation layer.
 
@@ -258,7 +262,7 @@ from driver_tests.option_contract import (
 )
 
 
-def test_public_connect_signature_covers_required_modes():
+def test_public_connect_signature_covers_initial_password_mode():
     parameters = set(inspect.signature(redshift_connector.connect).parameters)
     assert REQUIRED_DRIVER_OPTIONS <= parameters
 
@@ -274,7 +278,6 @@ def test_standard_settings_map_and_override_duplicate_options():
             "database": "ignored-option-database",
             "user": "ignored-option-user",
             "ssl": True,
-            "iam": False,
         },
     }
     assert build_connect_kwargs(settings) == {
@@ -284,16 +287,51 @@ def test_standard_settings_map_and_override_duplicate_options():
         "user": "app_user",
         "password": "password-value",
         "ssl": True,
-        "iam": False,
     }
 
 
 def test_dbshell_and_driver_options_are_classified_by_consumer():
     driver, dbshell = classify_options(
-        {"sslmode": "verify-full", "passfile": "pgpass", "profile": "dev"}
+        {"sslmode": "verify-full", "passfile": "pgpass"}
     )
-    assert driver == {"sslmode": "verify-full", "profile": "dev"}
+    assert driver == {"sslmode": "verify-full"}
     assert dbshell == {"sslmode": "verify-full", "passfile": "pgpass"}
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "iam",
+        "profile",
+        "credentials_provider",
+        "db_user",
+        "cluster_identifier",
+        "is_serverless",
+        "serverless_acct_id",
+        "serverless_work_group",
+        "access_key_id",
+        "secret_access_key",
+        "session_token",
+        "role_arn",
+        "web_identity_token",
+        "token",
+    ],
+)
+def test_deferred_authentication_options_are_rejected(name):
+    with pytest.raises(ValueError, match="username/password only"):
+        classify_options({name: "value"})
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"NAME": "warehouse", "PASSWORD": "password-value"},
+        {"NAME": "warehouse", "USER": "app_user"},
+    ],
+)
+def test_initial_password_mode_requires_user_and_password(settings):
+    with pytest.raises(ValueError, match="required"):
+        build_connect_kwargs(settings)
 
 
 @pytest.mark.parametrize(
@@ -373,19 +411,20 @@ REQUIRED_DRIVER_OPTIONS = {
     "sslmode",
     "timeout",
     "application_name",
-    "access_key_id",
-    "secret_access_key",
-    "session_token",
+}
+DEFERRED_AUTH_OPTIONS = {
+    "iam",
     "profile",
     "credentials_provider",
-    "region",
-    "cluster_identifier",
-    "iam",
     "db_user",
-    "role_arn",
+    "cluster_identifier",
     "is_serverless",
     "serverless_acct_id",
     "serverless_work_group",
+    "access_key_id",
+    "secret_access_key",
+    "session_token",
+    "role_arn",
     "web_identity_token",
     "token",
 }
@@ -420,6 +459,11 @@ def classify_options(options):
     driver = {}
     dbshell = {}
     for name, value in options.items():
+        if name in DEFERRED_AUTH_OPTIONS:
+            raise ValueError(
+                f"Unsupported authentication option {name}; "
+                "the initial release supports username/password only"
+            )
         if name in REJECTED_LEGACY_OPTIONS:
             raise ValueError(f"Unsupported legacy psycopg2 option: {name}")
         consumed = False
@@ -440,6 +484,9 @@ def build_connect_kwargs(settings_dict):
         value = settings_dict.get(setting_name)
         if value not in (None, ""):
             driver[driver_name] = int(value) if setting_name == "PORT" else value
+    for name in ("user", "password"):
+        if driver.get(name) in (None, ""):
+            raise ValueError(f"{name} is required for username/password authentication")
     return driver
 
 
@@ -750,8 +797,9 @@ every must-pass item below passes. Otherwise it must be exactly
 
 - DB-API 2.0, `format` parameter style, and thread-safety level 1.
 - Complete Django exception namespace and `DatabaseErrorWrapper` translation.
-- Explicit public connection parameters for password, IAM, profile,
-  provisioned cluster, Serverless workgroup, and IdP pass-through modes.
+- Explicit public connection parameters for username/password authentication.
+  IAM, profile, provisioned IAM, Serverless, and IdP parameters are inventoried
+  only as deferred, non-blocking evidence.
 - Public synchronous connection/cursor lifecycle methods and result metadata.
 - No production dependency on a private driver API or a psycopg2 adapter.
 - All blocking AWS-free CI jobs pass at the minimum driver version.
@@ -760,6 +808,8 @@ every must-pass item below passes. Otherwise it must be exactly
 
 - Standard `NAME`, `HOST`, `PORT`, `USER`, and `PASSWORD` values override
   duplicate driver names in `OPTIONS`.
+- `USER` and `PASSWORD` are required for the initial authentication mode;
+  alternate authentication options fail before opening a socket.
 - Driver options are accepted only when present in the public `connect()`
   signature.
 - `passfile`, `service`, `sslrootcert`, `sslcert`, and `sslkey` are retained
@@ -773,11 +823,14 @@ every must-pass item below passes. Otherwise it must be exactly
 
 - `Connection.cursor()` has no public named-cursor argument; Django chunked
   cursors must initially use an ordinary cursor or be marked unsupported.
+- IAM, AWS profile, provisioned IAM, Serverless, and identity-provider
+  authentication are unsupported in the initial redesigned release and require
+  a future design plus real-Redshift verification.
 - Real parameter binding, round trips for UUID/Decimal/date/time/datetime/
   timezone/Boolean/JSON/NULL/Redshift-specific/unknown types, savepoint SQL,
   `execute()`/`executemany()`/fetch/result-metadata behavior, connection health
-  after network failure, `CONN_MAX_AGE`, IAM, IdP, provisioned cluster, and
-  Serverless behavior remain unverified without a real Redshift service.
+  after network failure, and `CONN_MAX_AGE` remain unverified without a real
+  Redshift service.
 - Autocommit defaults and context-manager behavior are supported by AWS's
   public documentation/source evidence but are not integration-tested here.
 
@@ -799,13 +852,15 @@ with the actual observed evidence and a single decision.
 
 Run every command from Tasks 2-6 and inspect the GitHub Actions matrix.
 
-Expected GO condition: every must-pass public contract and every blocking CI
-job passes, the packaged LICENSE/NOTICE resolves the metadata discrepancy, and
-the backend can proceed without private driver APIs or a psycopg2 adapter.
+Expected GO condition: every must-pass public contract for the initial
+username/password scope and every blocking CI job passes, the packaged
+LICENSE/NOTICE resolves the metadata discrepancy, and the backend can proceed
+without private driver APIs or a psycopg2 adapter.
 
-Expected NO-GO condition: any mandatory exception, parameter style, public
-connection option, supported-version job, or license/security requirement
-fails. Record NO-GO, update the parent design, and do not create
+Expected NO-GO condition: any mandatory exception, parameter style,
+username/password connection option, supported-version job, or license/security
+requirement fails. Deferred alternate-authentication parameters do not produce
+NO-GO. Record NO-GO, update the parent design, and do not create
 `redesign/02-backend-foundation`.
 
 - [ ] **Step 3: Run final verification**
@@ -853,7 +908,8 @@ real-Redshift checks.
 
 ## Acceptance criteria
 
-- Public DB-API, connection, cursor, exception, and option contracts are tested.
+- Public DB-API, username/password connection, cursor, exception, and option
+  contracts are tested; alternate authentication is explicitly deferred.
 - Django 4.2.30, 5.2, 6.0, and 6.1 compatibility jobs are blocking.
 - Both the 2.1.14 security floor and investigated 2.1.16 release are covered.
 - No private driver API or psycopg2 compatibility adapter is required.

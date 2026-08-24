@@ -52,8 +52,10 @@ The design was checked against these local Django sources:
 - Inheriting from or copying a complete Django PostgreSQL backend.
 - Automatically changing an existing user's Redshift schema on package upgrade.
 - Provisioning Redshift or running real-Redshift CI in the initial stack.
-- Certifying each SAML, Okta, Azure AD, browser SSO, or other identity-provider
-  plugin without a real Redshift environment.
+- Supporting IAM, AWS profile, Redshift Serverless IAM, SAML, Okta, Azure AD,
+  browser SSO, or other identity-provider authentication in the initial
+  redesigned release. These modes require a separately designed and tested
+  follow-up.
 
 ## Supported version matrix
 
@@ -192,8 +194,7 @@ The initial setting mapping is:
 - `NAME` to `database`.
 - `HOST` to `host`.
 - `PORT` to `port`.
-- `USER` to the driver user or IAM database-user field selected by the
-  documented authentication mode.
+- `USER` to the driver `user` field.
 - `PASSWORD` to `password`.
 - Driver-specific values under `OPTIONS` to matching public `connect()`
   keyword arguments.
@@ -216,18 +217,18 @@ every credential-bearing value that must be redacted.
 
 ### Authentication scope
 
-The initial implementation supports configuration and unit-level contracts for:
+The initial redesigned release supports username/password authentication only.
+`USER` and `PASSWORD` are required and map to the driver's public `user` and
+`password` arguments. IAM, AWS profile, provisioned IAM, Redshift Serverless
+IAM, and identity-provider options are rejected with `ImproperlyConfigured`
+before a socket is opened.
 
-- Username/password authentication.
-- IAM through the boto3 default credential chain.
-- IAM through an AWS profile.
-- Provisioned cluster parameters.
-- Redshift Serverless workgroup parameters.
-- Pass-through of documented identity-provider options.
-
-IAM and identity-provider behavior is not claimed as integration-tested until a
-real Redshift environment is available. Secrets and tokens must not appear in
-debug SQL, logs, raised configuration messages, or test snapshots.
+The driver investigation may record that public arguments for those deferred
+authentication modes exist, but their presence is not a support claim or a GO
+criterion. A future design must define their setting combinations, precedence,
+secret handling, AWS-free construction tests, and real-Redshift verification
+before enabling them. Secrets and tokens must never appear in debug SQL, logs,
+raised configuration messages, or test snapshots.
 
 ## AWS driver adoption gate
 
@@ -255,7 +256,8 @@ The investigation covers:
 - Binary, UUID, Decimal, date, time, datetime, timezone, Boolean, JSON-as-text,
   NULL, Redshift-specific, and unknown type behavior.
 - Savepoint and named/server-side cursor support.
-- Password and IAM connection argument construction.
+- Username/password connection argument construction. Alternate authentication
+  arguments are inventoried only as non-blocking evidence for future work.
 
 The adoption criteria are:
 
@@ -264,7 +266,8 @@ The adoption criteria are:
 - No private driver API is required.
 - Django connection, cursor, transaction, and exception contracts can be met by
   focused adapter code.
-- Password and IAM configurations share one validated settings boundary.
+- Username/password configuration has one validated settings boundary, and
+  alternate authentication modes fail before connection.
 
 The selected driver version constraint is recorded in the investigation PR
 before it receives a GO decision.
@@ -363,11 +366,11 @@ exist.
 
 ### Deferred integration testing
 
-Real-Redshift tests, including IAM and Serverless authentication, remain skipped
-and clearly marked. A future issue will cover AWS account setup, secretless
-GitHub authentication, cost controls, test isolation, and scheduled or
-release-gated execution. Initial release notes must state that IAM is
-contract-tested but not integration-tested.
+Real-Redshift tests remain skipped and clearly marked. A future issue will cover
+AWS account setup, secretless GitHub authentication, cost controls, test
+isolation, scheduled or release-gated execution, and the design and validation
+of IAM, Serverless, and identity-provider authentication. Initial release notes
+must state that the first redesigned release supports username/password only.
 
 ## Error handling
 
@@ -439,6 +442,7 @@ The redesign is complete when:
   migration.
 - The vendored Django 4.0 code, psycopg2 dependency, and psycopg2 adapter are
   removed.
-- Documentation states all breaking changes and the absence of real-Redshift
-  IAM verification.
-- Deferred real-Redshift integration work is recorded in a follow-up issue.
+- Documentation states all breaking changes and that the initial redesigned
+  release supports username/password authentication only.
+- Deferred real-Redshift integration and alternate-authentication work is
+  recorded in follow-up issues.
