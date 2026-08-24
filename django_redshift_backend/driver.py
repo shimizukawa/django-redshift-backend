@@ -115,10 +115,11 @@ def classify_options(options):
     for name, value in options.items():
         if name in REJECTED_LEGACY_OPTIONS:
             _configuration_error(f"Unsupported legacy psycopg2 option: {name}")
-        if name == "sslmode" and value not in DRIVER_SSLMODES:
+        if name == "sslmode" and (
+            not isinstance(value, str) or value not in DRIVER_SSLMODES
+        ):
             _configuration_error(
-                f"Unsupported redshift_connector sslmode: {value}; "
-                "expected verify-ca or verify-full"
+                "Unsupported redshift_connector sslmode; expected verify-ca or verify-full"
             )
         consumed = False
         if name in public_driver_options:
@@ -137,8 +138,13 @@ def classify_dbshell_options(options):
         name: value for name, value in options.items() if name in DBSHELL_OPTIONS
     }
     sslmode = dbshell.get("sslmode")
-    if sslmode is not None and sslmode not in DBSHELL_SSLMODES:
-        _configuration_error(f"Unsupported psql sslmode: {sslmode}")
+    if sslmode is not None and (
+        not isinstance(sslmode, str) or sslmode not in DBSHELL_SSLMODES
+    ):
+        _configuration_error(
+            "Unsupported psql sslmode; expected disable, allow, prefer, require, "
+            "verify-ca, or verify-full"
+        )
     return dbshell
 
 

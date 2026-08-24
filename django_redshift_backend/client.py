@@ -1,3 +1,5 @@
+import signal
+
 from django.db.backends.base.client import BaseDatabaseClient
 
 from .driver import classify_dbshell_options
@@ -5,6 +7,14 @@ from .driver import classify_dbshell_options
 
 class DatabaseClient(BaseDatabaseClient):
     executable_name = "psql"
+
+    def runshell(self, parameters):
+        sigint_handler = signal.getsignal(signal.SIGINT)
+        try:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            super().runshell(parameters)
+        finally:
+            signal.signal(signal.SIGINT, sigint_handler)
 
     @classmethod
     def settings_to_cmd_args_env(cls, settings_dict, parameters):
