@@ -1,5 +1,4 @@
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.backends.base.operations import BaseDatabaseOperations
@@ -8,6 +7,7 @@ from django.db.utils import NotSupportedError
 
 from . import driver
 from .client import DatabaseClient
+from .creation import DatabaseCreation
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):
@@ -16,7 +16,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     Database = driver.Database
 
     client_class = DatabaseClient
-    creation_class = BaseDatabaseCreation
+    creation_class = DatabaseCreation
     features_class = BaseDatabaseFeatures
     introspection_class = BaseDatabaseIntrospection
     ops_class = BaseDatabaseOperations
