@@ -487,7 +487,7 @@ def classify_options(options):
         if name in DEFERRED_AUTH_OPTIONS:
             raise ValueError(
                 f"Unsupported authentication option {name}; "
-                "the initial release supports username/password only"
+                "the initial release supports username/password-only"
             )
         if name in REJECTED_LEGACY_OPTIONS:
             raise ValueError(f"Unsupported legacy psycopg2 option: {name}")
