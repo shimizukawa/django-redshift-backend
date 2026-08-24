@@ -1,7 +1,7 @@
 import pytest
 from django import db
 from django.db.utils import DatabaseErrorWrapper
-from django_redshift_backend.driver import Database
+from django_redshift_backend._backend import DatabaseWrapper
 
 EXCEPTION_NAMES = (
     "Error",
@@ -15,16 +15,11 @@ EXCEPTION_NAMES = (
     "NotSupportedError",
 )
 
-
-class Wrapper:
-    Database = Database
-    errors_occurred = False
-
-
 @pytest.mark.parametrize("name", EXCEPTION_NAMES)
 def test_django_translates_public_driver_exception(name):
-    wrapper = Wrapper()
-    driver_exception = getattr(Database, name)
+    wrapper = DatabaseWrapper.__new__(DatabaseWrapper)
+    wrapper.errors_occurred = False
+    driver_exception = getattr(DatabaseWrapper.Database, name)
     django_exception = getattr(db, name)
     with pytest.raises(django_exception), DatabaseErrorWrapper(wrapper):
         raise driver_exception("contract probe")
