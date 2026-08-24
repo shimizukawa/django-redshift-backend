@@ -1,6 +1,7 @@
 import inspect
 
-import redshift_connector
+import redshift_connector as Database
+from django.core.exceptions import ImproperlyConfigured
 
 STANDARD_SETTING_MAP = {
     "NAME": "database",
@@ -93,21 +94,29 @@ SENSITIVE_OPTIONS = {
 }
 
 
+def _configuration_error(message):
+    raise ImproperlyConfigured(message)
+
+
+def connect(**kwargs):
+    return Database.connect(**kwargs)
+
+
 def classify_options(options):
     deferred = sorted(DEFERRED_AUTH_OPTIONS.intersection(options))
     if deferred:
-        raise ValueError(
+        _configuration_error(
             "Authentication option(s) are unsupported because the initial "
             f"release is username/password-only: {', '.join(deferred)}"
         )
-    public_driver_options = set(inspect.signature(redshift_connector.connect).parameters)
+    public_driver_options = set(inspect.signature(Database.connect).parameters)
     driver = {}
     dbshell = {}
     for name, value in options.items():
         if name in REJECTED_LEGACY_OPTIONS:
-            raise ValueError(f"Unsupported legacy psycopg2 option: {name}")
+            _configuration_error(f"Unsupported legacy psycopg2 option: {name}")
         if name == "sslmode" and value not in DRIVER_SSLMODES:
-            raise ValueError(
+            _configuration_error(
                 f"Unsupported redshift_connector sslmode: {value}; "
                 "expected verify-ca or verify-full"
             )
@@ -119,22 +128,24 @@ def classify_options(options):
             dbshell[name] = value
             consumed = True
         if not consumed:
-            raise ValueError(f"Unknown database option: {name}")
+            _configuration_error(f"Unknown database option: {name}")
     return driver, dbshell
 
 
 def classify_dbshell_options(options):
-    dbshell = {name: value for name, value in options.items() if name in DBSHELL_OPTIONS}
+    dbshell = {
+        name: value for name, value in options.items() if name in DBSHELL_OPTIONS
+    }
     sslmode = dbshell.get("sslmode")
     if sslmode is not None and sslmode not in DBSHELL_SSLMODES:
-        raise ValueError(f"Unsupported psql sslmode: {sslmode}")
+        _configuration_error(f"Unsupported psql sslmode: {sslmode}")
     return dbshell
 
 
 def _require_nonempty(settings, name):
     value = settings.get(name)
     if value in (None, ""):
-        raise ValueError(f"{name} is required for the selected authentication mode")
+        _configuration_error(f"{name} is required for the selected authentication mode")
     return value
 
 
@@ -145,8 +156,14 @@ def build_connect_kwargs(settings_dict):
 
     for setting_name, driver_name in STANDARD_SETTING_MAP.items():
         value = settings_dict.get(setting_name)
-        if value not in (None, ""):
-            driver[driver_name] = int(value) if setting_name == "PORT" else value
+        if value in (None, ""):
+            continue
+        if setting_name == "PORT":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                _configuration_error("PORT must be an integer")
+        driver[driver_name] = value
     return driver
 
 
