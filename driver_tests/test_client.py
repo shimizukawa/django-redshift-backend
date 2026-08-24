@@ -1,5 +1,8 @@
+import signal
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.db.backends.base.client import BaseDatabaseClient
 
 from django_redshift_backend.client import DatabaseClient
 
@@ -83,3 +86,65 @@ def test_invalid_psql_sslmode_is_rejected():
         DatabaseClient.settings_to_cmd_args_env(
             {"NAME": "warehouse", "OPTIONS": {"sslmode": "invalid"}}, []
         )
+
+
+def test_runshell_ignores_sigint_for_the_superclass_call_and_restores_it(monkeypatch):
+    calls = []
+    original_handler = object()
+
+    monkeypatch.setattr(
+        signal,
+        "getsignal",
+        lambda signal_number: calls.append(("getsignal", signal_number)) or original_handler,
+    )
+    monkeypatch.setattr(
+        signal,
+        "signal",
+        lambda signal_number, handler: calls.append(("signal", signal_number, handler)),
+    )
+    monkeypatch.setattr(
+        BaseDatabaseClient,
+        "runshell",
+        lambda self, parameters: calls.append(("runshell", parameters)),
+    )
+
+    DatabaseClient(None).runshell(["-c", "SELECT 1"])
+
+    assert calls == [
+        ("getsignal", signal.SIGINT),
+        ("signal", signal.SIGINT, signal.SIG_IGN),
+        ("runshell", ["-c", "SELECT 1"]),
+        ("signal", signal.SIGINT, original_handler),
+    ]
+
+
+def test_runshell_restores_sigint_when_the_superclass_raises(monkeypatch):
+    calls = []
+    original_handler = object()
+
+    monkeypatch.setattr(
+        signal,
+        "getsignal",
+        lambda signal_number: calls.append(("getsignal", signal_number)) or original_handler,
+    )
+    monkeypatch.setattr(
+        signal,
+        "signal",
+        lambda signal_number, handler: calls.append(("signal", signal_number, handler)),
+    )
+
+    def raise_from_runshell(self, parameters):
+        calls.append(("runshell", parameters))
+        raise RuntimeError("superclass failed")
+
+    monkeypatch.setattr(BaseDatabaseClient, "runshell", raise_from_runshell)
+
+    with pytest.raises(RuntimeError, match="superclass failed"):
+        DatabaseClient(None).runshell([])
+
+    assert calls == [
+        ("getsignal", signal.SIGINT),
+        ("signal", signal.SIGINT, signal.SIG_IGN),
+        ("runshell", []),
+        ("signal", signal.SIGINT, original_handler),
+    ]

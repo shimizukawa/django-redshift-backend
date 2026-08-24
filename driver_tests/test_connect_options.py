@@ -182,7 +182,27 @@ def test_dbshell_and_driver_options_are_classified_by_consumer():
 
 @pytest.mark.parametrize("sslmode", ["disable", "allow", "prefer", "require"])
 def test_legacy_sslmode_is_rejected_by_driver_option_validation(sslmode):
-    with pytest.raises(ImproperlyConfigured, match=sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_options({"sslmode": sslmode})
+    assert "verify-ca" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert sslmode not in str(error.value)
+
+
+def test_invalid_driver_sslmode_error_does_not_echo_its_value():
+    invalid_sslmode = "distinctive-invalid-driver-sslmode"
+
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_options({"sslmode": invalid_sslmode})
+
+    assert "verify-ca" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert invalid_sslmode not in str(error.value)
+
+
+@pytest.mark.parametrize("sslmode", [42, []])
+def test_non_string_driver_sslmode_is_a_configuration_error(sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode"):
         classify_options({"sslmode": sslmode})
 
 
@@ -191,6 +211,23 @@ def test_legacy_sslmode_is_rejected_by_driver_option_validation(sslmode):
 )
 def test_dbshell_preserves_the_full_psql_sslmode_domain(sslmode):
     assert classify_dbshell_options({"sslmode": sslmode}) == {"sslmode": sslmode}
+
+
+def test_invalid_dbshell_sslmode_error_does_not_echo_its_value():
+    invalid_sslmode = "distinctive-invalid-dbshell-sslmode"
+
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_dbshell_options({"sslmode": invalid_sslmode})
+
+    assert "disable" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert invalid_sslmode not in str(error.value)
+
+
+@pytest.mark.parametrize("sslmode", [42, []])
+def test_non_string_dbshell_sslmode_is_a_configuration_error(sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode"):
+        classify_dbshell_options({"sslmode": sslmode})
 
 
 @pytest.mark.parametrize(
