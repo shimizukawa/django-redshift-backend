@@ -2,15 +2,17 @@
 
 ## Decision
 
-Decision: GO
+Decision: GO for username/password authentication only
 
-The public, AWS-free contracts required for the next backend layer pass on both
-the 2.1.14 security floor and the investigated 2.1.16 release. All 15 cells in
-the proposed blocking compatibility matrix also pass when reproduced locally.
-The next layer may therefore adopt the public connector API with
+The public, AWS-free contracts required for a password-only backend layer pass
+on both the 2.1.14 security floor and the investigated 2.1.16 release. All 15
+cells in the proposed blocking compatibility matrix also passed when reproduced
+locally. The next layer may therefore adopt the public connector API with
 `redshift-connector>=2.1.14,<3`, without a psycopg2 adapter or a private driver
-API. The stacked PR must still pass the same matrix on GitHub Actions before it
-is merged.
+API, provided the initial release accepts only non-empty Django `USER` and
+`PASSWORD`. IAM, profile, provisioned/Serverless IAM, and IdP/provider
+authentication are explicitly deferred and unsupported. The stacked PR must
+still pass the same matrix on GitHub Actions before it is merged.
 
 ## Candidate and proposed constraint
 
@@ -96,11 +98,10 @@ All must-pass contracts succeeded on public objects imported from
   `IntegrityError`, `InternalError`, `ProgrammingError`, and
   `NotSupportedError`. Django's public `DatabaseErrorWrapper` translates all
   nine names without an adapter.
-- The public `connect()` signature exposes password authentication; access key,
-  secret key, and session token; AWS profile and IAM modes; provisioned cluster
-  identification; Serverless account/workgroup mode; and the bounded provider
-  modes below. Arbitrary provider class paths are not part of the investigated
-  contract.
+- The public `connect()` signature exposes the `user` and `password` arguments
+  needed by the initial scope. Only password-scope arguments are a must-pass
+  signature contract; alternate-authentication arguments are inventory for
+  future work, not a CI GO gate.
 - Public synchronous `Connection` methods cover `cursor()`, `commit()`,
   `rollback()`, `close()`, and context management. Public `Cursor` methods and
   properties cover `execute()`, `executemany()`, fetch methods, `close()`,
@@ -118,41 +119,12 @@ All must-pass contracts succeeded on public objects imported from
 - Non-empty standard Django settings `NAME`, `HOST`, and `PORT` map to
   `database`, `host`, and `port` and override duplicate names supplied in
   `OPTIONS`.
-- In username/password mode, `USER` and `PASSWORD` map to `user` and
-  `password`. Both are required by the AWS-free prototype.
-- With `iam=True`, `USER` maps to `db_user`, not `user`, and a non-empty
-  `PASSWORD` is rejected as conflicting. An AWS profile is accepted as an IAM
-  credential source; without a profile the connector's default boto3 credential
-  chain remains available.
-- Provisioned IAM mode requires `cluster_identifier`. Serverless IAM mode
-  requires `is_serverless=True`, `serverless_acct_id`, and
-  `serverless_work_group`, and rejects a simultaneous `cluster_identifier`.
-  These checks construct and validate arguments only; they make no AWS calls.
-- Provider support is deliberately bounded and mode-specific:
-
-  | Provider/mode | `iam` | Required inputs | Django `USER` / `PASSWORD` |
-  | --- | --- | --- | --- |
-  | `IdpTokenAuthPlugin`, direct token | false/omitted | `NAME`, `HOST`, `token`, `token_type=SUBJECT_TOKEN` | must be empty; token authentication supplies identity |
-  | `IdpTokenAuthPlugin`, default AWS credential chain | false/omitted | `NAME`, `HOST`, no token or explicit AWS credential options; connector 2.1.16+ | must be empty |
-  | `BrowserIdcAuthPlugin` | false/omitted | `NAME`, `HOST`, `issuer_url`, `idc_region` | must be empty; browser authentication supplies identity |
-  | `OktaCredentialsProvider`, legacy IAM SAML | true | `NAME`, `HOST`, `cluster_identifier`, `idp_host`, `app_id`, `app_name` | required and mapped to ordinary driver `user` / `password`, not `db_user` |
-
-  AWS's current repository and Identity Center guide require a subject token
-  returned by `GetIdentityCenterAuthToken` for direct token use. Although the
-  older generic configuration page lists `ACCESS_TOKEN` and `EXT_JWT`, this
-  investigation follows the current 2.1.16 repository example and Identity
-  Center guide and accepts only `SUBJECT_TOKEN` for this mode.
-- The default AWS credential provider chain for `IdpTokenAuthPlugin` was added
-  in 2.1.16. The 2.1.14 floor is rejected for that single sub-mode before
-  connect; direct subject-token mode remains available at the floor. Explicit
-  identity-enhanced access-key triples are outside this bounded prototype and
-  are rejected rather than guessed.
-- AWS also documents `AdfsCredentialsProvider`, `AzureCredentialsProvider`,
-  `BrowserAzureCredentialsProvider`, `BrowserAzureOAuth2CredentialsProvider`,
-  `BrowserSamlCredentialsProvider`, and `PingCredentialsProvider`. Their
-  distinct requirements were not exercised here, so this prototype rejects
-  them, fully-qualified/arbitrary provider class paths, provider options without
-  a provider, and cross-family option combinations before connect.
+- Django `USER` and `PASSWORD` map to public driver `user` and `password`.
+  Both must be non-empty before any connector or socket use; duplicate `user`
+  or `password` values in `OPTIONS` are overwritten by the Django settings.
+- Any authentication or IdP option in the deferred inventory below is rejected
+  based on key presence, including false or empty-looking values, with a clear
+  username/password-only error before connector or socket use.
 - An option is passed to the driver only if it is in the public `connect()`
   signature.
 - `passfile`, `service`, `sslrootcert`, `sslcert`, and `sslkey` are retained
@@ -172,6 +144,30 @@ All must-pass contracts succeeded on public objects imported from
   `secret_access_key`, `session_token`, `client_secret`,
   `web_identity_token`, or `token`.
 
+## Deferred authentication inventory
+
+Both investigated public `connect()` signatures expose the same authentication
+and IdP-specific option inventory. The initial release does not construct or
+validate these modes. Instead, its bounded denylist rejects all 45 names:
+
+`access_key_id`, `allow_db_user_override`, `app_id`, `app_name`, `auth_profile`,
+`auto_create`, `client_id`, `client_secret`, `cluster_identifier`,
+`credentials_provider`, `db_groups`, `db_user`, `endpoint_url`,
+`force_lowercase`, `group_federation`, `iam`, `iam_disable_cache`,
+`identity_namespace`, `idc_client_display_name`, `idc_region`, `idp_host`,
+`idp_partition`, `idp_response_timeout`, `idp_tenant`, `is_serverless`,
+`issuer_url`, `listen_port`, `login_to_rp`, `login_url`, `partner_sp_id`,
+`preferred_role`, `principal_arn`, `profile`, `provider_name`, `role_arn`,
+`role_session_name`, `scope`, `secret_access_key`, `serverless_acct_id`,
+`serverless_work_group`, `session_token`, `ssl_insecure`, `token`, `token_type`,
+and `web_identity_token`.
+
+This inventory is non-blocking evidence for future design. It is not a claim
+that IAM, profile, provisioned IAM, Serverless, SAML, Identity Center, Okta, or
+any other `credentials_provider` works. `region` and generic transport,
+protocol, metadata, and numeric-conversion options remain ordinary public
+driver options because they do not select an authentication mode by themselves.
+
 ## Explicit limitations and deferred integration checks
 
 `Connection.cursor()` has no public named-cursor argument. Django chunked
@@ -182,8 +178,11 @@ The following behavior remains unverified until a real Redshift service is
 available: parameter binding; round trips for UUID, Decimal, date, time,
 datetime, timezone, Boolean, JSON, NULL, Redshift-specific, and unknown types;
 savepoint SQL; actual `execute()`, `executemany()`, fetch, and result-metadata
-behavior; connection health after a network failure; `CONN_MAX_AGE`; and IAM,
-IdP, provisioned-cluster, and Serverless authentication/connection behavior.
+behavior; connection health after a network failure; and `CONN_MAX_AGE`.
+IAM, profile, provisioned-cluster IAM, Serverless, SAML, Identity Center, Okta,
+and every other provider mode are not merely unverified: they are unsupported
+in the initial release and must be addressed by future design and real-Redshift
+integration work before their denylist entries can be removed.
 
 AWS's public examples state that autocommit is off by default and demonstrate
 setting `Connection.autocommit`. They also demonstrate connection and cursor
@@ -208,10 +207,10 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.14, 5 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.14, 48 passed
+PASS: Python 3.12.13, driver 2.1.14, 70 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.16, 48 passed
+PASS: Python 3.12.13, driver 2.1.16, 70 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 pytest driver_tests/test_django_exceptions.py -q
 PASS: Python 3.12.13, Django 4.2.30, locked driver 2.1.16, 9 passed
@@ -232,7 +231,7 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.16, 3 passed
 ```
 
-Final representative commands:
+Historical pre-scope-alignment matrix commands:
 
 ```text
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 pytest driver_tests -q
@@ -273,17 +272,14 @@ uv --cache-dir .uv-cache run --python PYTHON --project driver_tests --with "DJAN
 | 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
 | 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 48 passed |
 
-After this matrix completed, one additional AWS-documented IdP pass-through
-case was added to guard against applying password-mode validation too broadly.
-The round-1 focused metadata, option, and connection/cursor suites passed 40
-tests on each of 2.1.14 and 2.1.16.
-
-The round-2 provider-family work is pure AWS-free dictionary validation with no
-Django-version branch. Its final option suite passed 48 tests and its complete
-driver suite passed 65 tests on each of 2.1.14 and 2.1.16 using Django 5.2.8.
-The 15-cell matrix was not rerun because the changed behavior is Django-
-independent and both driver endpoints were explicitly covered; the earlier
-matrix remains the Python/Django compatibility evidence.
+The 48-test matrix above was recorded before the authentication scope was
+narrowed. Provider-construction tests from that stage were removed and do not
+constitute a support claim. The final password-only option suite passed 70
+tests on each of 2.1.14 and 2.1.16. The complete AWS-free driver suite passed
+87 tests on each version with Django 5.2.8. The 15-cell matrix was not rerun
+because the scope change is Django-independent dictionary validation, both
+driver endpoints were explicitly covered, and the earlier matrix remains the
+Python/Django public-surface compatibility evidence.
 
 Dependency and packaging evidence commands:
 
