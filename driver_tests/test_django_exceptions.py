@@ -3,7 +3,6 @@ import redshift_connector
 from django import db
 from django.db.utils import DatabaseErrorWrapper
 
-
 EXCEPTION_NAMES = (
     "Error",
     "InterfaceError",
@@ -27,7 +26,6 @@ def test_django_translates_public_driver_exception(name):
     wrapper = Wrapper()
     driver_exception = getattr(redshift_connector, name)
     django_exception = getattr(db, name)
-    with pytest.raises(django_exception):
-        with DatabaseErrorWrapper(wrapper):
-            raise driver_exception("contract probe")
+    with pytest.raises(django_exception), DatabaseErrorWrapper(wrapper):
+        raise driver_exception("contract probe")
     assert wrapper.errors_occurred is (name not in {"DataError", "IntegrityError"})

@@ -5,7 +5,6 @@ import redshift_connector
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
-
 DRIVER_RANGE = SpecifierSet(">=2.1.14,<3")
 DBAPI_EXCEPTIONS = (
     "Error",
