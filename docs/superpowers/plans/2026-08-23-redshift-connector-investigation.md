@@ -255,6 +255,7 @@ import pytest
 import redshift_connector
 
 from driver_tests.option_contract import (
+    DEFERRED_AUTH_OPTIONS,
     REQUIRED_DRIVER_OPTIONS,
     build_connect_kwargs,
     classify_options,
@@ -300,25 +301,10 @@ def test_dbshell_and_driver_options_are_classified_by_consumer():
 
 @pytest.mark.parametrize(
     "name",
-    [
-        "iam",
-        "profile",
-        "credentials_provider",
-        "db_user",
-        "cluster_identifier",
-        "is_serverless",
-        "serverless_acct_id",
-        "serverless_work_group",
-        "access_key_id",
-        "secret_access_key",
-        "session_token",
-        "role_arn",
-        "web_identity_token",
-        "token",
-    ],
+    sorted(DEFERRED_AUTH_OPTIONS),
 )
 def test_deferred_authentication_options_are_rejected(name):
-    with pytest.raises(ValueError, match="username/password only"):
+    with pytest.raises(ValueError, match="username/password-only"):
         classify_options({name: "value"})
 
 
@@ -327,6 +313,16 @@ def test_deferred_authentication_options_are_rejected(name):
     [
         {"NAME": "warehouse", "PASSWORD": "password-value"},
         {"NAME": "warehouse", "USER": "app_user"},
+        {
+            "NAME": "warehouse",
+            "PASSWORD": "password-value",
+            "OPTIONS": {"user": "option-user"},
+        },
+        {
+            "NAME": "warehouse",
+            "USER": "app_user",
+            "OPTIONS": {"password": "option-password"},
+        },
     ],
 )
 def test_initial_password_mode_requires_user_and_password(settings):
@@ -398,8 +394,6 @@ STANDARD_SETTING_MAP = {
     "NAME": "database",
     "HOST": "host",
     "PORT": "port",
-    "USER": "user",
-    "PASSWORD": "password",
 }
 REQUIRED_DRIVER_OPTIONS = {
     "user",
@@ -413,20 +407,51 @@ REQUIRED_DRIVER_OPTIONS = {
     "application_name",
 }
 DEFERRED_AUTH_OPTIONS = {
-    "iam",
-    "profile",
-    "credentials_provider",
-    "db_user",
+    "access_key_id",
+    "allow_db_user_override",
+    "app_id",
+    "app_name",
+    "auth_profile",
+    "auto_create",
+    "client_id",
+    "client_secret",
     "cluster_identifier",
+    "credentials_provider",
+    "db_groups",
+    "db_user",
+    "endpoint_url",
+    "force_lowercase",
+    "group_federation",
+    "iam",
+    "iam_disable_cache",
+    "identity_namespace",
+    "idc_client_display_name",
+    "idc_region",
+    "idp_host",
+    "idp_partition",
+    "idp_response_timeout",
+    "idp_tenant",
     "is_serverless",
+    "issuer_url",
+    "listen_port",
+    "login_to_rp",
+    "login_url",
+    "partner_sp_id",
+    "preferred_role",
+    "principal_arn",
+    "profile",
+    "provider_name",
+    "role_arn",
+    "role_session_name",
+    "scope",
+    "secret_access_key",
     "serverless_acct_id",
     "serverless_work_group",
-    "access_key_id",
-    "secret_access_key",
     "session_token",
-    "role_arn",
-    "web_identity_token",
+    "ssl_insecure",
     "token",
+    "token_type",
+    "web_identity_token",
 }
 DBSHELL_OPTIONS = {
     "passfile",
@@ -480,13 +505,17 @@ def classify_options(options):
 
 def build_connect_kwargs(settings_dict):
     driver, _ = classify_options(settings_dict.get("OPTIONS", {}))
+    for setting_name, driver_name in (("USER", "user"), ("PASSWORD", "password")):
+        value = settings_dict.get(setting_name)
+        if value in (None, ""):
+            raise ValueError(
+                f"{setting_name} is required for username/password authentication"
+            )
+        driver[driver_name] = value
     for setting_name, driver_name in STANDARD_SETTING_MAP.items():
         value = settings_dict.get(setting_name)
         if value not in (None, ""):
             driver[driver_name] = int(value) if setting_name == "PORT" else value
-    for name in ("user", "password"):
-        if driver.get(name) in (None, ""):
-            raise ValueError(f"{name} is required for username/password authentication")
     return driver
 
 
