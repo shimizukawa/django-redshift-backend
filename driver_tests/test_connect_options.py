@@ -224,7 +224,7 @@ def test_invalid_dbshell_sslmode_error_does_not_echo_its_value():
     assert invalid_sslmode not in str(error.value)
 
 
-@pytest.mark.parametrize("sslmode", [42, []])
+@pytest.mark.parametrize("sslmode", [42, [], None])
 def test_non_string_dbshell_sslmode_is_a_configuration_error(sslmode):
     with pytest.raises(ImproperlyConfigured, match="sslmode"):
         classify_dbshell_options({"sslmode": sslmode})
