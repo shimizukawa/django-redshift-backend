@@ -1,5 +1,4 @@
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.client import BaseDatabaseClient
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
@@ -8,6 +7,7 @@ from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.utils import NotSupportedError
 
 from . import driver
+from .client import DatabaseClient
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):
@@ -15,7 +15,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     display_name = "Amazon Redshift"
     Database = driver.Database
 
-    client_class = BaseDatabaseClient
+    client_class = DatabaseClient
     creation_class = BaseDatabaseCreation
     features_class = BaseDatabaseFeatures
     introspection_class = BaseDatabaseIntrospection
