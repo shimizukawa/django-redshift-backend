@@ -138,7 +138,7 @@ def classify_dbshell_options(options):
         name: value for name, value in options.items() if name in DBSHELL_OPTIONS
     }
     sslmode = dbshell.get("sslmode")
-    if sslmode is not None and (
+    if "sslmode" in dbshell and (
         not isinstance(sslmode, str) or sslmode not in DBSHELL_SSLMODES
     ):
         _configuration_error(
