@@ -6,6 +6,7 @@ from django.db.utils import NotSupportedError
 
 from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
+from django_redshift_backend.client import DatabaseClient
 
 
 class FakeCursor:
@@ -55,6 +56,7 @@ def test_wrapper_uses_public_base_backend():
     assert issubclass(DatabaseWrapper, BaseDatabaseWrapper)
     assert DatabaseWrapper.vendor == "redshift"
     assert DatabaseWrapper.Database is driver.Database
+    assert DatabaseWrapper.client_class is DatabaseClient
 
 
 def test_connection_params_use_password_contract():
