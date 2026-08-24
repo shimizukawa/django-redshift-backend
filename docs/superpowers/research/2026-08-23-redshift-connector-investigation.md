@@ -113,8 +113,8 @@ All must-pass contracts succeeded on public objects imported from
   The production backend is unchanged, and no private driver member or
   psycopg2 compatibility adapter is required by these contracts.
 - Every one of the 15 AWS-free compatibility-matrix cells passed locally at
-  the configured driver version; 14 exercise the 2.1.14 floor and the final
-  smoke cell exercises 2.1.16.
+  91 tests per cell; 14 exercise the 2.1.14 floor and the final smoke cell
+  exercises 2.1.16.
 
 ## Connection option crosswalk
 
@@ -209,10 +209,10 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.14, 5 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.14, 70 passed
+PASS: Python 3.12.13, driver 2.1.14, 74 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -q
-PASS: Python 3.12.13, driver 2.1.16, 70 passed
+PASS: Python 3.12.13, driver 2.1.16, 74 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 pytest driver_tests/test_django_exceptions.py -q
 PASS: Python 3.12.13, Django 4.2.30, locked driver 2.1.16, 9 passed
@@ -233,20 +233,20 @@ uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with redshif
 PASS: Python 3.12.13, driver 2.1.16, 3 passed
 ```
 
-Historical pre-scope-alignment matrix commands:
+Fresh current matrix representative commands:
 
 ```text
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 4.2.30, driver 2.1.14, 48 passed
+PASS: Python 3.12.13, Django 4.2.30, driver 2.1.14, 91 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 5.2.8, driver 2.1.14, 48 passed
+PASS: Python 3.12.13, Django 5.2.8, driver 2.1.14, 91 passed
 
 uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with "Django~=6.0.0" --with redshift-connector==2.1.14 pytest driver_tests -q
-PASS: Python 3.12.13, Django 6.0.8, driver 2.1.14, 48 passed
+PASS: Python 3.12.13, Django 6.0.8, driver 2.1.14, 91 passed
 
 uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 pytest driver_tests -q
-PASS: Python 3.14.0, Django 6.1, driver 2.1.16, 48 passed
+PASS: Python 3.14.0, Django 6.1, driver 2.1.16, 91 passed
 ```
 
 The complete workflow matrix was then reproduced with this exact command,
@@ -258,30 +258,27 @@ uv --cache-dir .uv-cache run --python PYTHON --project driver_tests --with "DJAN
 
 | Python | Django requirement (resolved) | Driver | Result |
 | --- | --- | --- | --- |
-| 3.10 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
-| 3.11 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
-| 3.12 | `Django==4.2.30` (4.2.30) | 2.1.14 | 48 passed |
-| 3.10 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
-| 3.11 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
-| 3.12 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
-| 3.13 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
-| 3.14 | `Django==5.2.8` (5.2.8) | 2.1.14 | 48 passed |
-| 3.12 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
-| 3.13 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
-| 3.14 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 48 passed |
-| 3.12 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
-| 3.13 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
-| 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 48 passed |
-| 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 48 passed |
+| 3.10 | `Django==4.2.30` (4.2.30) | 2.1.14 | 91 passed |
+| 3.11 | `Django==4.2.30` (4.2.30) | 2.1.14 | 91 passed |
+| 3.12 | `Django==4.2.30` (4.2.30) | 2.1.14 | 91 passed |
+| 3.10 | `Django==5.2.8` (5.2.8) | 2.1.14 | 91 passed |
+| 3.11 | `Django==5.2.8` (5.2.8) | 2.1.14 | 91 passed |
+| 3.12 | `Django==5.2.8` (5.2.8) | 2.1.14 | 91 passed |
+| 3.13 | `Django==5.2.8` (5.2.8) | 2.1.14 | 91 passed |
+| 3.14 | `Django==5.2.8` (5.2.8) | 2.1.14 | 91 passed |
+| 3.12 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 91 passed |
+| 3.13 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 91 passed |
+| 3.14 | `Django~=6.0.0` (6.0.8) | 2.1.14 | 91 passed |
+| 3.12 | `Django~=6.1.0` (6.1) | 2.1.14 | 91 passed |
+| 3.13 | `Django~=6.1.0` (6.1) | 2.1.14 | 91 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.14 | 91 passed |
+| 3.14 | `Django~=6.1.0` (6.1) | 2.1.16 | 91 passed |
 
-The 48-test matrix above was recorded before the authentication scope was
-narrowed. Provider-construction tests from that stage were removed and do not
-constitute a support claim. The final password-only option suite passed 70
-tests on each of 2.1.14 and 2.1.16. The complete AWS-free driver suite passed
-87 tests on each version with Django 5.2.8. The 15-cell matrix was not rerun
-because the scope change is Django-independent dictionary validation, both
-driver endpoints were explicitly covered, and the earlier matrix remains the
-Python/Django public-surface compatibility evidence.
+This fresh matrix uses the expanded password-only suite and supersedes the
+historical 48-test matrix evidence. Each cell used an isolated uv project
+environment, matching CI job isolation. The focused password-only option suite
+passed 74 tests on each of 2.1.14 and 2.1.16, and the complete AWS-free driver
+suite passed 91 tests on both connector endpoints with Django 5.2.8.
 
 Dependency and packaging evidence commands:
 

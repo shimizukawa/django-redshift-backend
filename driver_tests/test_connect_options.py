@@ -117,6 +117,40 @@ def test_deferred_authentication_options_are_rejected_before_connect(name, value
             "USER",
         ),
         ({"NAME": "warehouse", "USER": "app_user", "PASSWORD": ""}, "PASSWORD"),
+        (
+            {
+                "NAME": "warehouse",
+                "PASSWORD": "password-value",
+                "OPTIONS": {"user": "option-user"},
+            },
+            "USER",
+        ),
+        (
+            {
+                "NAME": "warehouse",
+                "USER": "",
+                "PASSWORD": "password-value",
+                "OPTIONS": {"user": "option-user"},
+            },
+            "USER",
+        ),
+        (
+            {
+                "NAME": "warehouse",
+                "USER": "app_user",
+                "OPTIONS": {"password": "option-password"},
+            },
+            "PASSWORD",
+        ),
+        (
+            {
+                "NAME": "warehouse",
+                "USER": "app_user",
+                "PASSWORD": "",
+                "OPTIONS": {"password": "option-password"},
+            },
+            "PASSWORD",
+        ),
     ],
 )
 def test_password_authentication_requires_nonempty_user_and_password(
