@@ -6,6 +6,7 @@ dist/
 .venv
 .cache
 .tox
+.worktrees/
 .pytest_cache/
 doc/_build/
 .coverage
