@@ -1,3 +1,4 @@
+import copy
 from datetime import date, datetime, time
 from decimal import Decimal
 import re
@@ -6,7 +7,7 @@ from uuid import UUID
 from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import UniqueConstraint
+from django.db.models import NOT_PROVIDED, UniqueConstraint, Value
 from django.db.utils import NotSupportedError
 
 from .meta import DistKey, SortKey
@@ -14,6 +15,7 @@ from .meta import DistKey, SortKey
 
 class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
+    sql_create_column = "ALTER TABLE %(table)s ADD COLUMN %(column)s %(definition)s"
     sql_delete_column = "ALTER TABLE %(table)s DROP COLUMN %(column)s CASCADE"
     sql_delete_fk = "ALTER TABLE %(table)s DROP CONSTRAINT %(name)s"
     sql_alter_distkey = "ALTER TABLE %(table)s ALTER DISTKEY %(column)s"
@@ -187,6 +189,62 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             field,
             "_fk_%(to_table)s_%(to_column)s",
         )
+
+    def _has_db_default(self, field):
+        has_db_default = getattr(field, "has_db_default", None)
+        return bool(has_db_default and has_db_default())
+
+    def _literal_db_default(self, field):
+        if not self._has_db_default(field):
+            return False
+        return isinstance(field._db_default_expression, Value)
+
+    def _has_usable_add_default(self, field):
+        if self._literal_db_default(field):
+            return True
+        return (
+            field.default is not NOT_PROVIDED
+            and not callable(field.default)
+            and self.effective_default(field) is not None
+        )
+
+    def _column_for_add(self, field):
+        column_field = copy.copy(field)
+        column_field._unique = False
+        column_field.primary_key = False
+        return column_field
+
+    def add_field(self, model, field):
+        if field.many_to_many and field.remote_field.through._meta.auto_created:
+            return self.create_model(field.remote_field.through)
+        if field.get_internal_type() in {"AutoField", "BigAutoField", "SmallAutoField"}:
+            raise NotSupportedError("Amazon Redshift cannot add an IDENTITY column.")
+        self._validate_field_ddl(field)
+        if self._has_db_default(field) and not self._literal_db_default(field):
+            raise NotSupportedError("Amazon Redshift expression db_default is unsupported.")
+        if not field.null and not self._has_usable_add_default(field):
+            raise NotSupportedError(
+                f"Cannot add non-null field {model._meta.label}.{field.name} "
+                "without a literal default."
+            )
+        definition, params = self.column_sql(
+            model,
+            self._column_for_add(field),
+            include_default=True,
+        )
+        self.execute(
+            self.sql_create_column
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "column": self.quote_name(field.column),
+                "definition": definition,
+            },
+            params,
+        )
+        if field.unique:
+            self.execute(self._create_unique_sql(model, [field]))
+        if field.remote_field and field.db_constraint:
+            self.execute(self._informational_fk_sql(model, field))
 
     def create_model(self, model):
         self._validate_model_ddl(model)
