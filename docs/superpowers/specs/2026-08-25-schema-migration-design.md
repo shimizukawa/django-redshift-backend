@@ -308,14 +308,17 @@ Redshift `ALTER TABLE ADD COLUMN` cannot add a DISTKEY, SORTKEY, IDENTITY,
 PRIMARY KEY, UNIQUE, or REFERENCES attribute. The editor therefore separates
 column addition from supported informational constraint statements.
 
-A nullable field, or a non-null field with a supported temporary/default value,
-can be added directly. Adding a non-null field without a usable default is
-rejected before execution with an actionable `NotSupportedError`, because the
-operation is unsafe for a populated table.
+A nullable field can be added directly. A non-null field can be added when it
+has a supported literal Python default or `db_default`. Adding a non-null field
+without a usable default is rejected before execution with an actionable
+`NotSupportedError`, because the operation is unsafe for a populated table.
 
-Defaults used only to populate a migration do not become permanent database
-defaults unless the model explicitly declares a supported `db_default` on a
-Django version that provides that API.
+Amazon Redshift has no documented `ALTER COLUMN DROP DEFAULT`. Consequently, a
+Python default used by `AddField` to populate existing rows remains as a
+database DEFAULT. This preserves the legacy backend's behavior and existing
+migration replay compatibility, but differs from Django backends that remove a
+temporary migration default. The behavior is tested and documented rather than
+presented as standard Django semantics.
 
 ### AlterField
 
@@ -325,7 +328,10 @@ The direct Redshift type alteration path is deliberately narrow:
   `ALTER COLUMN ... TYPE varchar(n)` when the column has no incompatible
   encoding or default condition known to the editor;
 - every other supported type conversion uses the tested column-recreation
-  sequence.
+  sequence;
+- recreation of a non-null column requires a supported literal Python default
+  or `db_default`; it is rejected rather than inventing a type-specific value
+  such as `0`, an empty string, or the current time.
 
 The recreation sequence is:
 
@@ -351,13 +357,18 @@ and later add database defaults and generated fields. The common editor detects
 capabilities through the installed Django field contract rather than importing
 newer symbols on 4.2.
 
-- Python-side migration defaults continue to support safe `AddField` and
-  recreation operations.
+- Python-side migration defaults continue to support `AddField` and recreation
+  operations, and remain as database defaults when required to create a
+  non-null replacement column.
 - literal `db_default` values may be emitted on CREATE/ADD and preserved by
   recreation.
-- changing or dropping a database default uses recreation because Redshift has
-  no general `ALTER COLUMN SET/DROP DEFAULT` syntax in its documented
-  `ALTER TABLE` grammar.
+- changing a literal database default can use recreation when the replacement
+  column remains valid throughout the operation.
+- dropping a database default can use recreation for a nullable column, but is
+  rejected for a non-null column because Redshift cannot add the replacement
+  as NOT NULL without a default and cannot drop the temporary default later.
+- changing only a Python-side default does not produce DDL unless that default
+  is required by another physical field change.
 - expression defaults remain unsupported initially because Redshift requires a
   variable-free expression and a broad Django feature flag cannot express that
   subset safely.
@@ -435,10 +446,11 @@ Tests cover:
 - foreign-key field-to-column resolution;
 - DistKey add and remove operations;
 - explicit rejection of ordinary index operations;
-- AddField constraints and temporary defaults;
+- AddField constraints and persistent compatibility defaults;
 - direct VARCHAR enlargement;
 - recreation for VARCHAR reduction and other type changes;
-- nullability and literal default transitions;
+- supported nullability and literal default transitions, plus explicit
+  rejection of unsafe default-free non-null recreation;
 - VARBYTE literal and conversion SQL;
 - removal of ordinary and SORTKEY columns;
 - quoting and parameter collection without a driver connection;
@@ -515,6 +527,9 @@ The implementation PR documents:
 - an optional migration example to set the intended DistKey;
 - the lack of automatic schema repair;
 - the limitation on changing SortKey through `Meta.ordering`;
+- the persistent database default left by non-null `AddField` operations that
+  use a Python-side migration default;
+- rejection of non-null recreation when no explicit default is available;
 - multi-statement, non-atomic column recreation;
 - the Django 4.2 compatibility module's deletion boundary.
 
