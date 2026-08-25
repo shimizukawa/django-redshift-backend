@@ -6,7 +6,8 @@ def pytest_configure():
     if not settings.configured:
         settings.configure(
             DATABASES={},
-            INSTALLED_APPS=[],
+            DEFAULT_AUTO_FIELD="django.db.models.AutoField",
+            INSTALLED_APPS=["tests.testapp"],
             SECRET_KEY="driver-contract",
             USE_TZ=False,
         )
