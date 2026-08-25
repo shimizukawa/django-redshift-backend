@@ -70,11 +70,13 @@ is authoritative for Redshift SQL behavior:
 - [Supported data types](https://docs.aws.amazon.com/redshift/latest/dg/c_Supported_data_types.html)
 - [Isolation levels](https://docs.aws.amazon.com/redshift/latest/dg/c_serial_isolation.html)
 
-The local Django source trees are the authority for the supported framework
+The upstream Django source trees are the authority for the supported framework
 contracts:
 
-- `../django-4.2.30` for Django 4.2.30.
-- `../django` for current Django 6.x development behavior.
+- [Django 4.2.30 source](https://github.com/django/django/tree/4.2.30) for
+  Django 4.2.30.
+- [Django main source](https://github.com/django/django/tree/main) for current
+  Django 6.x development behavior.
 
 ## Architecture
 
