@@ -42,7 +42,9 @@ def test_dbapi_exception_namespace_is_complete():
     assert issubclass(redshift_connector.InterfaceError, redshift_connector.Error)
     assert issubclass(redshift_connector.DatabaseError, redshift_connector.Error)
     for name in DBAPI_EXCEPTIONS[2:]:
-        assert issubclass(getattr(redshift_connector, name), redshift_connector.DatabaseError)
+        assert issubclass(
+            getattr(redshift_connector, name), redshift_connector.DatabaseError
+        )
 
 
 def test_dbapi_value_constructors_are_public():

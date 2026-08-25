@@ -18,7 +18,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
     sql_create_column = "ALTER TABLE %(table)s ADD COLUMN %(column)s %(definition)s"
     sql_delete_column = "ALTER TABLE %(table)s DROP COLUMN %(column)s CASCADE"
-    sql_alter_column_type = "ALTER TABLE %(table)s ALTER COLUMN %(column)s TYPE %(type)s"
+    sql_alter_column_type = (
+        "ALTER TABLE %(table)s ALTER COLUMN %(column)s TYPE %(type)s"
+    )
     sql_delete_fk = "ALTER TABLE %(table)s DROP CONSTRAINT %(name)s"
     sql_alter_distkey = "ALTER TABLE %(table)s ALTER DISTKEY %(column)s"
     sql_remove_distkey = "ALTER TABLE %(table)s ALTER DISTSTYLE AUTO"
@@ -77,7 +79,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             self._validate_field_ddl(field)
 
     def _validate_create_options(self, model):
-        distkeys = [index for index in model._meta.indexes if isinstance(index, DistKey)]
+        distkeys = [
+            index for index in model._meta.indexes if isinstance(index, DistKey)
+        ]
         if len(distkeys) > 1:
             raise ValueError(f"Model {model.__name__} has more than one DistKey.")
         distkey_column = None
@@ -148,8 +152,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             )
         self._validate_distkey(model, index)
         self.execute(
-            self.sql_remove_distkey
-            % {"table": self.quote_name(model._meta.db_table)}
+            self.sql_remove_distkey % {"table": self.quote_name(model._meta.db_table)}
         )
 
     def _validate_supported_constraint(self, constraint):
@@ -223,9 +226,13 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             raise NotSupportedError("Amazon Redshift cannot add an IDENTITY column.")
         self._validate_field_ddl(field)
         if field.default is not NOT_PROVIDED and callable(field.default):
-            raise NotSupportedError("Amazon Redshift cannot add a field with a callable default.")
+            raise NotSupportedError(
+                "Amazon Redshift cannot add a field with a callable default."
+            )
         if self._has_db_default(field) and not self._literal_db_default(field):
-            raise NotSupportedError("Amazon Redshift expression db_default is unsupported.")
+            raise NotSupportedError(
+                "Amazon Redshift expression db_default is unsupported."
+            )
         if not field.null and not self._has_usable_add_default(field):
             raise NotSupportedError(
                 f"Cannot add non-null field {model._meta.label}.{field.name} "
@@ -324,9 +331,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
     def _table_key_columns(self, model):
         declarations = [
-            value
-            for value in model._meta.ordering
-            if isinstance(value, SortKey)
+            value for value in model._meta.ordering if isinstance(value, SortKey)
         ]
         declarations.extend(
             field_name
@@ -349,7 +354,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 unique_fields = [model._meta.get_field(name) for name in fields]
                 self.execute(self._create_unique_sql(model, unique_fields))
         for constraint in model._meta.constraints:
-            if isinstance(constraint, UniqueConstraint) and field.name in constraint.fields:
+            if (
+                isinstance(constraint, UniqueConstraint)
+                and field.name in constraint.fields
+            ):
                 self._validate_supported_constraint(constraint)
                 self.execute(constraint.create_sql(model, self))
         if field.remote_field and field.db_constraint:
@@ -368,7 +376,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if getattr(new_field, "generated", False):
             raise NotSupportedError("Amazon Redshift generated fields are unsupported.")
         if self._has_db_default(new_field) and not self._literal_db_default(new_field):
-            raise NotSupportedError("Amazon Redshift expression db_default is unsupported.")
+            raise NotSupportedError(
+                "Amazon Redshift expression db_default is unsupported."
+            )
         if not new_field.null and not self._has_usable_add_default(new_field):
             raise NotSupportedError(
                 f"Cannot recreate non-null field {model._meta.label}.{new_field.name} "
@@ -380,7 +390,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 f"{model._meta.label}.{new_field.name}."
             )
         for constraint in model._meta.constraints:
-            if isinstance(constraint, UniqueConstraint) and new_field.name in constraint.fields:
+            if (
+                isinstance(constraint, UniqueConstraint)
+                and new_field.name in constraint.fields
+            ):
                 self._validate_supported_constraint(constraint)
 
     def _recreate_column(self, model, old_field, new_field):
