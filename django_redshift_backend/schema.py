@@ -6,6 +6,7 @@ from uuid import UUID
 from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.core.exceptions import FieldDoesNotExist
+from django.db.models import UniqueConstraint
 from django.db.utils import NotSupportedError
 
 from .meta import DistKey, SortKey
@@ -15,6 +16,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
     sql_delete_column = "ALTER TABLE %(table)s DROP COLUMN %(column)s CASCADE"
     sql_delete_fk = "ALTER TABLE %(table)s DROP CONSTRAINT %(name)s"
+    sql_alter_distkey = "ALTER TABLE %(table)s ALTER DISTKEY %(column)s"
+    sql_remove_distkey = "ALTER TABLE %(table)s ALTER DISTSTYLE AUTO"
 
     @property
     def multiply_varchar_length(self):
@@ -114,6 +117,70 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         self._validate_model_indexes(model)
         return []
 
+    def _validate_distkey(self, model, index):
+        if len(index.fields) != 1:
+            raise ValueError(
+                f"DistKey on model {model.__name__} must have exactly one field."
+            )
+        return self._column_name(model, index.fields[0])
+
+    def add_index(self, model, index, concurrently=False):
+        if not isinstance(index, DistKey):
+            raise NotSupportedError(
+                f"Amazon Redshift does not support index {index.name!r}."
+            )
+        self.execute(
+            self.sql_alter_distkey
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "column": self._validate_distkey(model, index),
+            }
+        )
+
+    def remove_index(self, model, index, concurrently=False):
+        if not isinstance(index, DistKey):
+            raise NotSupportedError(
+                f"Amazon Redshift does not support index {index.name!r}."
+            )
+        self._validate_distkey(model, index)
+        self.execute(
+            self.sql_remove_distkey
+            % {"table": self.quote_name(model._meta.db_table)}
+        )
+
+    def _validate_supported_constraint(self, constraint):
+        supported = (
+            isinstance(constraint, UniqueConstraint)
+            and bool(constraint.fields)
+            and not constraint.expressions
+            and constraint.condition is None
+            and not constraint.include
+            and not constraint.opclasses
+            and getattr(constraint, "nulls_distinct", None) is None
+        )
+        if not supported:
+            raise NotSupportedError(
+                f"Amazon Redshift does not support constraint {constraint.name!r}."
+            )
+
+    def _validate_model_constraints(self, model):
+        for constraint in model._meta.constraints:
+            self._validate_supported_constraint(constraint)
+
+    def add_constraint(self, model, constraint):
+        self._validate_supported_constraint(constraint)
+        super().add_constraint(model, constraint)
+
+    def remove_constraint(self, model, constraint):
+        self._validate_supported_constraint(constraint)
+        super().remove_constraint(model, constraint)
+
+    def alter_index_together(self, model, old_index_together, new_index_together):
+        if set(old_index_together) != set(new_index_together):
+            raise NotSupportedError(
+                f"Amazon Redshift does not support index_together on {model._meta.label}."
+            )
+
     def _informational_fk_sql(self, model, field):
         return self._create_fk_sql(
             model,
@@ -123,6 +190,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
     def create_model(self, model):
         self._validate_model_ddl(model)
+        self._validate_model_constraints(model)
         self._validate_model_indexes(model)
         self._validate_create_options(model)
         super().create_model(model)
