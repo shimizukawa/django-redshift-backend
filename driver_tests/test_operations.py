@@ -156,20 +156,19 @@ def test_explain_supports_only_plain_and_verbose():
         ops.explain_query_prefix(analyze=True)
 
 
-def test_temporal_subtraction_preserves_params():
+@pytest.mark.parametrize("internal_type", ["DateField", "DateTimeField", "TimeField"])
+def test_temporal_subtraction_uses_microsecond_datediff(internal_type):
     ops = operations()
-    date_sql, date_params = ops.subtract_temporals(
-        "DateField", ("start_date + %s", (1,)), ("end_date + %s", (2,))
+    sql, params = ops.subtract_temporals(
+        internal_type,
+        ("lhs_value + %s", (1,)),
+        ("rhs_value + %s", (2,)),
     )
-    timestamp_sql, timestamp_params = ops.subtract_temporals(
-        "DateTimeField", ("start_time + %s", (1,)), ("end_time + %s", (2,))
+    assert sql == (
+        "(INTERVAL '1 microsecond' * "
+        "DATEDIFF(microsecond, (rhs_value + %s), (lhs_value + %s)))"
     )
-    assert date_sql == (
-        "(INTERVAL '1 day' * ((start_date + %s) - (end_date + %s)))"
-    )
-    assert date_params == (1, 2)
-    assert timestamp_sql == "((start_time + %s) - (end_time + %s))"
-    assert timestamp_params == (1, 2)
+    assert params == (2, 1)
 
 
 def test_join_preparation_does_not_add_postgresql_casts():

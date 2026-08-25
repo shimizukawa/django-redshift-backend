@@ -83,8 +83,10 @@ The initial feature policy is:
 | Native UUID | unsupported | Preserve VARCHAR storage and Python conversion. |
 | JSON text storage | supported | Preserve JSON serialization to the existing VARCHAR representation. |
 | PostgreSQL JSON operators/contains | unsupported | Text storage does not provide PostgreSQL `->`, `@>`, or related semantics. |
-| Native duration/temporal subtraction | supported | AWS documents interval types and date/timestamp arithmetic. |
+| Native duration/same-type temporal subtraction | supported | AWS documents `DATEDIFF` for DATE, TIME, and TIMESTAMP values at microsecond precision, plus interval-by-numeric multiplication. |
+| Mixed Date/DateTime subtraction | deferred | Django's generic mixed-type compiler path bypasses the public backend temporal hook, and Redshift's direct mixed subtraction has asymmetric result types. |
 | Enforced PK/FK/UNIQUE/CHECK constraints | unsupported | Redshift key constraints are informational and CHECK constraints are unsupported. |
+| Default/FK/check/JSON introspection | unsupported | This layer retains base introspection and has no Redshift-specific implementation for these contracts. |
 | Indexes and tablespaces | unsupported | AWS lists both as unsupported PostgreSQL features. |
 | DDL rollback | unsupported | Redshift DDL and `TRUNCATE` have transaction exceptions. |
 | Combined alters | unsupported | Preserve the current conservative declaration; schema handling is a later layer. |
@@ -92,12 +94,19 @@ The initial feature policy is:
 | Explain formats | none | Redshift returns text plans; JSON, XML, and YAML formats are not documented. |
 | Explain options | `VERBOSE` only | AWS documents `EXPLAIN [VERBOSE] query`. |
 | Group by selected primary keys | unsupported | Redshift does not enforce primary-key uniqueness. |
-| Comments and default-keyword insert flags | unsupported | Preserve the current conservative contract until their dedicated SQL is designed. |
+| JSON object functions and negative indexing | unsupported | VARCHAR-backed JSON does not provide Django's native JSON function/indexing contract. |
+| Native tuple lookups/comparisons | unsupported | No Redshift evidence or backend implementation supports Django's native tuple SQL path. |
+| Database-side `ON DELETE` actions | unsupported | Redshift constraints are informational and this layer provides no database-side cascade/default/null implementation. |
+| Comments | unsupported | Preserve the current conservative contract until comment SQL is designed. |
+| `DEFAULT VALUES` and `DEFAULT` in inserts | supported | AWS documents both single-row `DEFAULT VALUES` and `DEFAULT` in single- and multi-row `VALUES` lists. |
 
 Feature names added only in newer Django versions may be assigned on older
 versions because class attributes are harmless there. Tests assert the values
 through the public feature object in every supported version; production code
-does not branch on Django version.
+does not branch on Django version. In particular, introspection, JSON-object
+and negative-index, tuple, and database-side `ON DELETE` capabilities are
+declared false explicitly instead of inheriting version-sensitive true defaults
+from Django's base feature class.
 
 ### `operations.py`
 
@@ -131,8 +140,22 @@ The public operation contract includes:
   Redshift permits truncating referenced tables and its constraints are
   informational.
 - Empty sequence-reset SQL and an empty deferrable suffix.
-- Redshift-compatible temporal subtraction SQL.
+- Same-type Date, DateTime, and Time subtraction using
+  `INTERVAL '1 microsecond' * DATEDIFF(microsecond, rhs, lhs)`, with parameters
+  reordered to remain associated with the SQL operands.
 - Join expressions without the PostgreSQL backend's type-cast insertion.
+
+Django 4.2 through the current 6.x source converts only same-type Date,
+DateTime, and Time subtraction into `TemporalSubtraction`, which calls the
+public `DatabaseOperations.subtract_temporals()` hook. Mixed Date/DateTime
+subtraction remains a generic `CombinedExpression`. Its only public backend
+hook, `combine_expression()`, receives the operator and compiled SQL strings
+but no operand field types, so it cannot safely distinguish temporal from
+numeric subtraction. `check_expression_support()` is not called on that
+generic compilation path. This layer therefore does not claim runtime-correct
+mixed Date/DateTime subtraction; the asymmetric Redshift semantics remain
+deferred to the compiler-focused layer rather than introducing a custom
+compiler or monkeypatch here.
 
 `max_name_length()` remains 63 for compatibility with names produced by the
 existing backend even though Redshift documents a 127-byte identifier limit.
@@ -251,6 +274,8 @@ the released fix and prove that existing migration state remains unchanged.
 | Nested `atomic()` | No database savepoint; an inner failure affects the containing transaction | Intentional correction of a PostgreSQL-only capability claim |
 | PostgreSQL EXPLAIN formats/options | Rejected; plain and `VERBOSE` remain | Intentional correction |
 | PostgreSQL JSON operators | Rejected while text serialization remains | Intentional correction |
+| Same-type Date/DateTime/Time subtraction | Compiles to a microsecond-precision Redshift interval | Existing bug fix / completed temporal contract |
+| Mixed Date/DateTime subtraction | Generic Django SQL remains visible but runtime correctness is not claimed | Deferred activation risk for the compiler-focused layer |
 | PostgreSQL tablespace/index/collation assumptions | Feature flags are false | Intentional correction; schema SQL remains later work |
 | Multiple-table PostgreSQL `TRUNCATE`, `RESTART IDENTITY`, and `CASCADE` syntax | Replaced by one Redshift statement per table without reset/cascade clauses | Intentional correction |
 | Existing migrations and database schema | Unchanged | Compatible; no database migration required |
@@ -268,29 +293,37 @@ wrapper becomes the public backend in the final stack layer.
   execution.
 - Error text names the unsupported capability but does not expose SQL
   parameters or connection values.
-- No method silently emits PostgreSQL syntax for an unsupported feature.
+- No backend-owned method silently emits PostgreSQL syntax for an unsupported
+  feature. The documented mixed Date/DateTime generic-compiler limitation is
+  outside the backend temporal hook and is not claimed as supported behavior.
 
 ## Test strategy
 
 All new tests live in `driver_tests` and use `uv`.
 
 1. **Feature contract tests** instantiate the inactive wrapper and assert the
-   explicit capability values on every supported Django version.
+   explicit capability values on every supported Django version, including
+   newer capability names assigned harmlessly on older Django releases.
 2. **Operation unit tests** assert SQL and parameter tuples for quoting,
    date/time extraction and truncation, timezone conversion, normal and
    field-specific distinct, identity lookup, UUID/JSON/IP adaptation,
-   temporal subtraction, bulk values, flush, and explain behavior.
-3. **Issue #171 regression** compiles Django's real `Trunc` expression through
+   same-type Date/DateTime/Time subtraction, bulk values, flush, and explain
+   behavior.
+3. **Temporal ORM compilation tests** prove that same-type Date, DateTime, and
+   Time subtraction reaches the Redshift `DATEDIFF` interval hook. Both mixed
+   Date/DateTime directions are characterization tests of the deferred generic
+   compiler path and do not claim runtime correctness.
+4. **Issue #171 regression** compiles Django's real `Trunc` expression through
    the redesigned wrapper. A direct method-call test alone is insufficient.
-4. **Issue #102 / PR #103 regression** proves the false conflict flag is absent,
+5. **Issue #102 / PR #103 regression** proves the false conflict flag is absent,
    explicit conflict-ignore is rejected, and an auto-created ManyToMany manager
    chooses the existing-row pre-check path without generating `ON CONFLICT`.
-5. **Activation boundary tests** prove the public `base.DatabaseWrapper` is
+6. **Activation boundary tests** prove the public `base.DatabaseWrapper` is
    still the existing implementation while `_backend.DatabaseWrapper` uses
    the new operations and features.
-6. **Compatibility tests** prove `base.py`, `meta.py`, `distkey.py`, migration
+7. **Compatibility tests** prove `base.py`, `meta.py`, `distkey.py`, migration
    modules, and schema-facing behavior are unchanged in this layer.
-7. **Matrix verification** runs all 15 existing Django/Python/driver cells,
+8. **Matrix verification** runs all 15 existing Django/Python/driver cells,
    the root regression suite, Ruff, package build, twine check, and wheel
    content inspection.
 
@@ -319,6 +352,7 @@ Amazon Redshift specifications:
 - [Unsupported PostgreSQL functions](https://docs.aws.amazon.com/redshift/latest/dg/c_unsupported-postgresql-functions.html)
 - [Table constraints](https://docs.aws.amazon.com/redshift/latest/dg/t_Defining_constraints.html)
 - [Date and time functions](https://docs.aws.amazon.com/redshift/latest/dg/Date_functions_header.html)
+- [DATEDIFF](https://docs.aws.amazon.com/redshift/latest/dg/r_DATEDIFF_function.html)
 - [Interval data types and literals](https://docs.aws.amazon.com/redshift/latest/dg/r_interval_data_types.html)
 - [BEGIN](https://docs.aws.amazon.com/redshift/latest/dg/r_BEGIN.html)
 - [INSERT](https://docs.aws.amazon.com/redshift/latest/dg/r_INSERT_30.html)

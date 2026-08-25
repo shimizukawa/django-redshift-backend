@@ -95,11 +95,11 @@ class DatabaseOperations(BaseDatabaseOperations):
     def subtract_temporals(self, internal_type, lhs, rhs):
         lhs_sql, lhs_params = lhs
         rhs_sql, rhs_params = rhs
-        params = (*lhs_params, *rhs_params)
-        difference = f"({lhs_sql}) - ({rhs_sql})"
-        if internal_type == "DateField":
-            return f"(INTERVAL '1 day' * ({difference}))", params
-        return f"({difference})", params
+        return (
+            "(INTERVAL '1 microsecond' * "
+            f"DATEDIFF(microsecond, ({rhs_sql}), ({lhs_sql})))",
+            (*rhs_params, *lhs_params),
+        )
 
     def prepare_join_on_clause(self, lhs_table, lhs_field, rhs_table, rhs_field):
         return Col(lhs_table, lhs_field), Col(rhs_table, rhs_field)

@@ -109,9 +109,11 @@ def test_internal_wrapper_registers_redshift_features():
         ("supports_json_field", True),
         ("has_native_json_field", False),
         ("can_introspect_json_field", False),
+        ("has_json_object_function", False),
         ("supports_primitives_in_json_field", True),
         ("has_json_operators", False),
         ("supports_json_field_contains", False),
+        ("supports_json_negative_indexing", False),
         ("supports_foreign_keys", False),
         ("can_create_inline_fk", False),
         ("can_defer_constraint_checks", False),
@@ -120,6 +122,8 @@ def test_internal_wrapper_registers_redshift_features():
         ("supports_partially_nullable_unique_constraints", False),
         ("supports_column_check_constraints", False),
         ("supports_table_check_constraints", False),
+        ("can_introspect_default", False),
+        ("can_introspect_foreign_keys", False),
         ("can_introspect_check_constraints", False),
         ("supports_tablespaces", False),
         ("supports_index_column_ordering", False),
@@ -142,6 +146,11 @@ def test_internal_wrapper_registers_redshift_features():
         ("supports_default_keyword_in_insert", True),
         ("supports_default_keyword_in_bulk_insert", True),
         ("supports_nulls_distinct_unique_constraints", False),
+        ("supports_tuple_lookups", False),
+        ("supports_tuple_comparison_against_subquery", False),
+        ("supports_on_delete_db_cascade", False),
+        ("supports_on_delete_db_default", False),
+        ("supports_on_delete_db_null", False),
         ("supports_paramstyle_pyformat", False),
         ("supports_select_for_update_with_limit", False),
         ("supports_inspectdb", False),
@@ -227,9 +236,11 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_json_field = True
     has_native_json_field = False
     can_introspect_json_field = False
+    has_json_object_function = False
     supports_primitives_in_json_field = True
     has_json_operators = False
     supports_json_field_contains = False
+    supports_json_negative_indexing = False
 
     supports_foreign_keys = False
     can_create_inline_fk = False
@@ -239,6 +250,8 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_partially_nullable_unique_constraints = False
     supports_column_check_constraints = False
     supports_table_check_constraints = False
+    can_introspect_default = False
+    can_introspect_foreign_keys = False
     can_introspect_check_constraints = False
 
     supports_tablespaces = False
@@ -265,6 +278,11 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_default_keyword_in_insert = True
     supports_default_keyword_in_bulk_insert = True
     supports_nulls_distinct_unique_constraints = False
+    supports_tuple_lookups = False
+    supports_tuple_comparison_against_subquery = False
+    supports_on_delete_db_cascade = False
+    supports_on_delete_db_default = False
+    supports_on_delete_db_null = False
     supports_paramstyle_pyformat = False
     supports_inspectdb = False
 
@@ -465,7 +483,7 @@ from django.db.models.sql.query import Query
 from django_redshift_backend._backend import DatabaseWrapper
 
 
-class Event(models.Model):
+class TemporalEvent(models.Model):
     class Meta:
         app_label = "driver_contract"
         managed = False
@@ -488,7 +506,7 @@ def settings_dict():
 
 def test_trunc_expression_compiles_through_django_orm():
     wrapper = DatabaseWrapper(settings_dict(), "issue-171")
-    query = Query(Event)
+    query = Query(TemporalEvent)
     compiler = SQLCompiler(query, wrapper, "issue-171")
     value = datetime.datetime(2026, 8, 25, 12, 30)
     expression = Trunc(
@@ -628,6 +646,7 @@ git commit -m "feat: add modern Redshift date operations"
 **Files:**
 - Modify: `django_redshift_backend/operations.py`
 - Create: `driver_tests/test_operations.py`
+- Create: `driver_tests/test_temporal_subtraction.py`
 
 **Interfaces:**
 - Consumes: Task 2's `DatabaseOperations`; Django `NotSupportedError`, `Col`, management command styles, JSON encoders, and field metadata.
@@ -806,20 +825,19 @@ def test_explain_supports_only_plain_and_verbose():
         ops.explain_query_prefix(analyze=True)
 
 
-def test_temporal_subtraction_preserves_params():
+@pytest.mark.parametrize("internal_type", ["DateField", "DateTimeField", "TimeField"])
+def test_temporal_subtraction_uses_microsecond_datediff(internal_type):
     ops = operations()
-    date_sql, date_params = ops.subtract_temporals(
-        "DateField", ("start_date + %s", (1,)), ("end_date + %s", (2,))
+    sql, params = ops.subtract_temporals(
+        internal_type,
+        ("lhs_value + %s", (1,)),
+        ("rhs_value + %s", (2,)),
     )
-    timestamp_sql, timestamp_params = ops.subtract_temporals(
-        "DateTimeField", ("start_time + %s", (1,)), ("end_time + %s", (2,))
+    assert sql == (
+        "(INTERVAL '1 microsecond' * "
+        "DATEDIFF(microsecond, (rhs_value + %s), (lhs_value + %s)))"
     )
-    assert date_sql == (
-        "(INTERVAL '1 day' * ((start_date + %s) - (end_date + %s)))"
-    )
-    assert date_params == (1, 2)
-    assert timestamp_sql == "((start_time + %s) - (end_time + %s))"
-    assert timestamp_params == (1, 2)
+    assert params == (2, 1)
 
 
 def test_join_preparation_does_not_add_postgresql_casts():
@@ -837,12 +855,141 @@ def test_default_compiler_remains_in_use():
     assert operations().compiler_module == "django.db.models.sql.compiler"
 ```
 
+Create `driver_tests/test_temporal_subtraction.py` with an unmanaged model and
+the public ORM compiler path used by every supported Django release:
+
+```python
+import datetime
+
+import pytest
+from django.db import models
+from django.db.models import DateField, DateTimeField, TimeField, Value
+from django.db.models.sql.compiler import SQLCompiler
+from django.db.models.sql.query import Query
+
+from django_redshift_backend._backend import DatabaseWrapper
+
+
+class Event(models.Model):
+    class Meta:
+        app_label = "driver_contract"
+        managed = False
+
+
+def settings_dict():
+    return {
+        "NAME": "warehouse",
+        "HOST": "example.test",
+        "PORT": "5439",
+        "USER": "alice",
+        "PASSWORD": "secret",
+        "OPTIONS": {},
+        "TIME_ZONE": None,
+        "CONN_MAX_AGE": 0,
+        "CONN_HEALTH_CHECKS": False,
+        "AUTOCOMMIT": True,
+    }
+
+
+def compile_subtraction(lhs_value, lhs_field, rhs_value, rhs_field):
+    wrapper = DatabaseWrapper(settings_dict(), "temporal-subtraction")
+    query = Query(Event)
+    compiler = SQLCompiler(query, wrapper, "temporal-subtraction")
+    expression = (
+        Value(lhs_value, output_field=lhs_field)
+        - Value(rhs_value, output_field=rhs_field)
+    ).resolve_expression(query)
+    sql, params = compiler.compile(expression)
+    return sql, tuple(params)
+
+
+@pytest.mark.parametrize(
+    ("lhs_value", "rhs_value", "field", "expected_params"),
+    [
+        (
+            datetime.date(2026, 8, 25),
+            datetime.date(2026, 8, 24),
+            DateField,
+            ("2026-08-24", "2026-08-25"),
+        ),
+        (
+            datetime.datetime(2026, 8, 25, 12, 30, 45, 123456),
+            datetime.datetime(2026, 8, 24, 10, 15, 30, 654321),
+            DateTimeField,
+            ("2026-08-24 10:15:30.654321", "2026-08-25 12:30:45.123456"),
+        ),
+        (
+            datetime.time(12, 30, 45, 123456),
+            datetime.time(10, 15, 30, 654321),
+            TimeField,
+            ("10:15:30.654321", "12:30:45.123456"),
+        ),
+    ],
+    ids=["date", "datetime", "time"],
+)
+def test_same_type_temporal_subtraction_compiles_to_interval(
+    lhs_value, rhs_value, field, expected_params
+):
+    sql, params = compile_subtraction(
+        lhs_value,
+        field(),
+        rhs_value,
+        field(),
+    )
+    assert sql == (
+        "(INTERVAL '1 microsecond' * DATEDIFF(microsecond, (%s), (%s)))"
+    )
+    assert params == expected_params
+
+
+@pytest.mark.parametrize(
+    ("lhs_value", "lhs_field", "rhs_value", "rhs_field", "expected_params"),
+    [
+        (
+            datetime.date(2026, 8, 25),
+            DateField,
+            datetime.datetime(2026, 8, 24, 10, 15, 30),
+            DateTimeField,
+            ("2026-08-25", "2026-08-24 10:15:30"),
+        ),
+        (
+            datetime.datetime(2026, 8, 25, 12, 30, 45),
+            DateTimeField,
+            datetime.date(2026, 8, 24),
+            DateField,
+            ("2026-08-25 12:30:45", "2026-08-24"),
+        ),
+    ],
+    ids=["date-minus-datetime", "datetime-minus-date"],
+)
+def test_mixed_temporal_subtraction_exposes_deferred_compiler_limitation(
+    lhs_value, lhs_field, rhs_value, rhs_field, expected_params
+):
+    """Characterize Django's pass-through SQL; don't claim runtime correctness."""
+    sql, params = compile_subtraction(
+        lhs_value,
+        lhs_field(),
+        rhs_value,
+        rhs_field(),
+    )
+    assert sql == "(%s - %s)"
+    assert params == expected_params
+```
+
+The mixed tests intentionally characterize Django's public compilation path.
+In Django 4.2 through current 6.x, only same-type temporal operands reach
+`subtract_temporals()`. Mixed Date/DateTime operands use `CombinedExpression`;
+the public `combine_expression()` hook has no field-type metadata and
+`check_expression_support()` is not called there. Do not override the compiler,
+monkeypatch Django, or guess from SQL strings. Runtime-correct mixed subtraction
+remains deferred to the compiler-focused layer.
+
 - [ ] **Step 4: Run the tests to verify RED**
 
 Run:
 
 ```powershell
-uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 --with psycopg2-binary pytest driver_tests/test_operations.py -q
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 --with psycopg2-binary pytest driver_tests/test_operations.py driver_tests/test_temporal_subtraction.py -q
 ```
 
 Expected: tests fail on unimplemented quoting, identity, unsupported behavior, adapters, flush, and explain methods.
@@ -944,11 +1091,11 @@ class DatabaseOperations(BaseDatabaseOperations):
     def subtract_temporals(self, internal_type, lhs, rhs):
         lhs_sql, lhs_params = lhs
         rhs_sql, rhs_params = rhs
-        params = (*lhs_params, *rhs_params)
-        difference = f"({lhs_sql}) - ({rhs_sql})"
-        if internal_type == "DateField":
-            return f"(INTERVAL '1 day' * ({difference}))", params
-        return f"({difference})", params
+        return (
+            "(INTERVAL '1 microsecond' * "
+            f"DATEDIFF(microsecond, ({rhs_sql}), ({lhs_sql})))",
+            (*rhs_params, *lhs_params),
+        )
 
     def prepare_join_on_clause(self, lhs_table, lhs_field, rhs_table, rhs_field):
         return Col(lhs_table, lhs_field), Col(rhs_table, rhs_field)
@@ -964,8 +1111,8 @@ conflict suffix, and the default compiler module.
 Run:
 
 ```powershell
-uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 --with psycopg2-binary pytest driver_tests/test_operations.py driver_tests/test_operations_datetime.py driver_tests/test_issue_171.py -q
-uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 --with psycopg2-binary pytest driver_tests/test_operations.py driver_tests/test_operations_datetime.py driver_tests/test_issue_171.py -q
+uv --cache-dir .uv-cache run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 --with psycopg2-binary pytest driver_tests/test_operations.py driver_tests/test_operations_datetime.py driver_tests/test_issue_171.py driver_tests/test_temporal_subtraction.py -q
+uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 --with psycopg2-binary pytest driver_tests/test_operations.py driver_tests/test_operations_datetime.py driver_tests/test_issue_171.py driver_tests/test_temporal_subtraction.py -q
 ```
 
 Expected: all pass with identical SQL contracts.
@@ -973,7 +1120,7 @@ Expected: all pass with identical SQL contracts.
 - [ ] **Step 7: Commit the general operation contract**
 
 ```powershell
-git add django_redshift_backend/operations.py driver_tests/test_operations.py
+git add django_redshift_backend/operations.py driver_tests/test_operations.py driver_tests/test_temporal_subtraction.py
 git commit -m "feat: add Redshift operation contracts"
 ```
 

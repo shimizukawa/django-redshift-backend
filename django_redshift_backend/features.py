@@ -38,9 +38,11 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_json_field = True
     has_native_json_field = False
     can_introspect_json_field = False
+    has_json_object_function = False
     supports_primitives_in_json_field = True
     has_json_operators = False
     supports_json_field_contains = False
+    supports_json_negative_indexing = False
 
     supports_foreign_keys = False
     can_create_inline_fk = False
@@ -50,6 +52,8 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_partially_nullable_unique_constraints = False
     supports_column_check_constraints = False
     supports_table_check_constraints = False
+    can_introspect_default = False
+    can_introspect_foreign_keys = False
     can_introspect_check_constraints = False
 
     supports_tablespaces = False
@@ -76,6 +80,11 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_default_keyword_in_insert = True
     supports_default_keyword_in_bulk_insert = True
     supports_nulls_distinct_unique_constraints = False
+    supports_tuple_lookups = False
+    supports_tuple_comparison_against_subquery = False
+    supports_on_delete_db_cascade = False
+    supports_on_delete_db_default = False
+    supports_on_delete_db_null = False
     supports_paramstyle_pyformat = False
     supports_inspectdb = False
 
