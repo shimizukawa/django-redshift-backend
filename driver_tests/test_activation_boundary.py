@@ -4,6 +4,7 @@ from django.db.backends.base.operations import BaseDatabaseOperations
 from django_redshift_backend import _backend, base
 from django_redshift_backend.features import DatabaseFeatures
 from django_redshift_backend.operations import DatabaseOperations
+from django_redshift_backend.schema import DatabaseSchemaEditor
 
 
 def test_existing_engine_entry_point_is_not_activated():
@@ -24,3 +25,10 @@ def test_new_components_use_only_public_base_classes():
 
 def test_pull_request_104_compiler_copy_is_not_activated():
     assert DatabaseOperations.compiler_module == "django.db.models.sql.compiler"
+
+
+def test_new_schema_editor_is_internal_only():
+    assert _backend.DatabaseWrapper.SchemaEditorClass.__module__.startswith(
+        "django_redshift_backend.schema"
+    )
+    assert base.DatabaseWrapper.SchemaEditorClass is not DatabaseSchemaEditor
