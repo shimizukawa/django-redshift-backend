@@ -2,7 +2,9 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
+from django.db import models
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.test import override_settings
 
 from django_redshift_backend import _backend
 from django_redshift_backend.schema import DatabaseSchemaEditor
@@ -11,6 +13,14 @@ from django_redshift_backend.schema_django42 import (
 )
 
 from .schema_helpers import make_wrapper
+
+
+class VarcharContractModel(models.Model):
+    name = models.CharField(max_length=10)
+    body = models.TextField()
+
+    class Meta:
+        app_label = "schema_contract"
 
 
 def test_schema_editor_uses_installed_public_base_class():
@@ -62,3 +72,19 @@ def test_quote_value_supports_database_free_sql_collection():
     assert editor.quote_value(datetime(2026, 8, 25, 12, 30, 45)) == (
         "'2026-08-25T12:30:45'"
     )
+
+
+@override_settings(REDSHIFT_VARCHAR_LENGTH_MULTIPLIER=3)
+def test_column_sql_multiplies_only_bounded_varchar_lengths():
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    name_sql, _ = editor.column_sql(
+        VarcharContractModel, VarcharContractModel._meta.get_field("name")
+    )
+    body_sql, _ = editor.column_sql(
+        VarcharContractModel, VarcharContractModel._meta.get_field("body")
+    )
+
+    assert name_sql.startswith("varchar(30)")
+    assert body_sql.startswith("varchar(max)")
+    assert editor._multiply_bounded_varchar_lengths("integer NOT NULL") == "integer NOT NULL"
+    assert editor._multiply_bounded_varchar_lengths(None) is None
