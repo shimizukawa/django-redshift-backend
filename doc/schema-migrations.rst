@@ -18,7 +18,7 @@ Inspect an existing table before deciding to repair it::
 
     SELECT "column", distkey
     FROM pg_table_def
-    WHERE schemaname = 'public' AND tablename = 'your_table'
+    WHERE schemaname = 'your_schema' AND tablename = 'your_table'
     ORDER BY sortkey, "column";
 
 If the application confirms the intended key, it can add its own migration::
@@ -29,14 +29,19 @@ If the application confirms the intended key, it can add its own migration::
         dependencies = [("your_app", "previous_migration")]
         operations = [
             migrations.RunSQL(
-                'ALTER TABLE "your_table" ALTER DISTKEY "customer_id"',
-                'ALTER TABLE "your_table" ALTER DISTSTYLE AUTO',
+                'ALTER TABLE "your_schema"."your_table" '
+                'ALTER DISTKEY "customer_id"',
             ),
         ]
 
-The backend never runs this correction automatically. See the Amazon Redshift
-`ALTER TABLE documentation <https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>`_
-for the authoritative syntax and restrictions.
+Replace every placeholder consistently with the inspected schema and table.
+This manual repair is intentionally irreversible: Redshift can preserve a
+large table's distribution key when changing it to automatic distribution.
+Provide a ``reverse_sql`` only when the application has recorded and can
+recreate the exact pre-repair distribution state. The backend never runs this
+correction automatically. See the Amazon Redshift `ALTER TABLE documentation
+<https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html>`_ for the
+authoritative syntax and restrictions.
 
 SORTKEY changes
 ---------------
