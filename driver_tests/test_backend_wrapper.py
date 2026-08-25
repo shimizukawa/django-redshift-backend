@@ -9,6 +9,7 @@ from django_redshift_backend._backend import DatabaseWrapper
 from django_redshift_backend.client import DatabaseClient
 from django_redshift_backend.creation import DatabaseCreation
 from django_redshift_backend.features import DatabaseFeatures
+from django_redshift_backend.operations import DatabaseOperations
 
 
 class FakeCursor:
@@ -66,6 +67,7 @@ def test_wrapper_registers_foundation_components():
     assert wrapper.client.__class__.__name__ == "DatabaseClient"
     assert isinstance(wrapper.creation, DatabaseCreation)
     assert isinstance(wrapper.features, DatabaseFeatures)
+    assert isinstance(wrapper.ops, DatabaseOperations)
 
 
 def test_connection_params_use_password_contract():
