@@ -69,24 +69,29 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         for field in model._meta.local_fields:
             self._validate_field_ddl(field)
 
-    def _get_create_options(self, model):
+    def _validate_create_options(self, model):
         distkeys = [index for index in model._meta.indexes if isinstance(index, DistKey)]
         if len(distkeys) > 1:
             raise ValueError(f"Model {model.__name__} has more than one DistKey.")
-        options = []
+        distkey_column = None
         if distkeys:
             if len(distkeys[0].fields) != 1:
                 raise ValueError(
                     f"DistKey on model {model.__name__} must have exactly one field."
                 )
-            options.append(
-                f"DISTKEY({self._column_name(model, distkeys[0].fields[0])})"
-            )
+            distkey_column = self._column_name(model, distkeys[0].fields[0])
         sortkeys = [
             self._column_name(model, value)
             for value in model._meta.ordering
             if isinstance(value, SortKey)
         ]
+        return distkey_column, sortkeys
+
+    def _get_create_options(self, model):
+        distkey_column, sortkeys = self._validate_create_options(model)
+        options = []
+        if distkey_column:
+            options.append(f"DISTKEY({distkey_column})")
         if sortkeys:
             options.append(f"SORTKEY({', '.join(sortkeys)})")
         return " ".join(options)
@@ -119,6 +124,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     def create_model(self, model):
         self._validate_model_ddl(model)
         self._validate_model_indexes(model)
+        self._validate_create_options(model)
         super().create_model(model)
         for field in model._meta.local_fields:
             if field.remote_field and field.db_constraint:
