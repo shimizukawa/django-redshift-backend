@@ -201,7 +201,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
     def _has_usable_add_default(self, field):
         if self._literal_db_default(field):
-            return True
+            return field._db_default_expression.value is not None
         return (
             field.default is not NOT_PROVIDED
             and not callable(field.default)
@@ -220,6 +220,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if field.get_internal_type() in {"AutoField", "BigAutoField", "SmallAutoField"}:
             raise NotSupportedError("Amazon Redshift cannot add an IDENTITY column.")
         self._validate_field_ddl(field)
+        if field.default is not NOT_PROVIDED and callable(field.default):
+            raise NotSupportedError("Amazon Redshift cannot add a field with a callable default.")
         if self._has_db_default(field) and not self._literal_db_default(field):
             raise NotSupportedError("Amazon Redshift expression db_default is unsupported.")
         if not field.null and not self._has_usable_add_default(field):
