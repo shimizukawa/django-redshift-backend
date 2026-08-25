@@ -63,6 +63,9 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_functions_in_partial_indexes = False
     supports_covering_indexes = False
     supports_expression_indexes = False
+    supports_expression_defaults = False
+    supports_stored_generated_columns = False
+    supports_virtual_generated_columns = False
     indexes_foreign_keys = False
     can_rename_index = False
 
