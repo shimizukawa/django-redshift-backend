@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from decimal import Decimal
+import re
 from uuid import UUID
 
 from django.conf import settings
@@ -14,6 +15,20 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     @property
     def multiply_varchar_length(self):
         return int(getattr(settings, "REDSHIFT_VARCHAR_LENGTH_MULTIPLIER", 1))
+
+    def column_sql(self, *args, **kwargs):
+        definition, params = super().column_sql(*args, **kwargs)
+        return self._multiply_bounded_varchar_lengths(definition), params
+
+    def _multiply_bounded_varchar_lengths(self, definition):
+        if definition is None:
+            return None
+
+        def replace(match):
+            length = int(match.group(1)) * self.multiply_varchar_length
+            return f"varchar({length})"
+
+        return re.sub(r"varchar\((\d+)\)", replace, definition)
 
     def quote_value(self, value):
         if value is None:
