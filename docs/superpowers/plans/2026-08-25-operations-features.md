@@ -456,12 +456,19 @@ Create `driver_tests/test_issue_171.py`:
 ```python
 import datetime
 
+from django.db import models
 from django.db.models import DateTimeField, Value
 from django.db.models.functions import Trunc
 from django.db.models.sql.compiler import SQLCompiler
 from django.db.models.sql.query import Query
 
 from django_redshift_backend._backend import DatabaseWrapper
+
+
+class Event(models.Model):
+    class Meta:
+        app_label = "driver_contract"
+        managed = False
 
 
 def settings_dict():
@@ -481,7 +488,7 @@ def settings_dict():
 
 def test_trunc_expression_compiles_through_django_orm():
     wrapper = DatabaseWrapper(settings_dict(), "issue-171")
-    query = Query()
+    query = Query(Event)
     compiler = SQLCompiler(query, wrapper, "issue-171")
     value = datetime.datetime(2026, 8, 25, 12, 30)
     expression = Trunc(
@@ -493,7 +500,7 @@ def test_trunc_expression_compiles_through_django_orm():
     sql, params = compiler.compile(expression)
 
     assert sql == "DATE_TRUNC(%s, %s)"
-    assert tuple(params) == ("day", value)
+    assert tuple(params) == ("day", str(value))
 ```
 
 - [ ] **Step 4: Run the tests to verify RED**
