@@ -6,9 +6,10 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.backends.ddl_references import Statement
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import NOT_PROVIDED, UniqueConstraint, Value
-from django.db.utils import NotSupportedError
+from django.db.utils import NotSupportedError, ProgrammingError
 
 from .meta import DistKey, SortKey
 
@@ -17,6 +18,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
     sql_create_column = "ALTER TABLE %(table)s ADD COLUMN %(column)s %(definition)s"
     sql_delete_column = "ALTER TABLE %(table)s DROP COLUMN %(column)s CASCADE"
+    sql_alter_column_type = "ALTER TABLE %(table)s ALTER COLUMN %(column)s TYPE %(type)s"
     sql_delete_fk = "ALTER TABLE %(table)s DROP CONSTRAINT %(name)s"
     sql_alter_distkey = "ALTER TABLE %(table)s ALTER DISTKEY %(column)s"
     sql_remove_distkey = "ALTER TABLE %(table)s ALTER DISTSTYLE AUTO"
@@ -247,6 +249,217 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             self.execute(self._create_unique_sql(model, [field]))
         if field.remote_field and field.db_constraint:
             self.execute(self._informational_fk_sql(model, field))
+
+    _varchar_re = re.compile(r"^varchar\((\d+)\)$", re.IGNORECASE)
+
+    def _varchar_length(self, db_type):
+        match = self._varchar_re.fullmatch(db_type or "")
+        return int(match.group(1)) if match else None
+
+    def _can_alter_varchar_directly(self, old_field, new_field, old_type, new_type):
+        old_length = self._varchar_length(old_type)
+        new_length = self._varchar_length(new_type)
+        return (
+            old_length is not None
+            and new_length is not None
+            and new_length >= old_length
+            and old_field.null == new_field.null
+            and old_field.unique == new_field.unique
+            and old_field.primary_key == new_field.primary_key
+            and not self._has_db_default(old_field)
+            and not self._has_db_default(new_field)
+        )
+
+    def _conversion_sql(self, old_field, new_field):
+        old_column = self.quote_name(old_field.column)
+        old_kind = old_field.get_internal_type()
+        new_kind = new_field.get_internal_type()
+        if old_kind == "BinaryField" and new_kind != "BinaryField":
+            return f"{old_column}::varchar"
+        if old_kind != "BinaryField" and new_kind == "BinaryField":
+            return f"{old_column}::varbyte"
+        return old_column
+
+    def _table_key_field_names(self, model):
+        names = {
+            value.removeprefix("-")
+            for value in model._meta.ordering
+            if isinstance(value, SortKey)
+        }
+        names.update(
+            index.fields[0]
+            for index in model._meta.indexes
+            if isinstance(index, DistKey) and len(index.fields) == 1
+        )
+        return names
+
+    def _recreate_state_constraints(self, model, field):
+        if field.primary_key:
+            self.execute(self._create_primary_key_sql(model, field))
+        elif field.unique:
+            self.execute(self._create_unique_sql(model, [field]))
+        for fields in model._meta.unique_together:
+            if field.name in fields:
+                unique_fields = [model._meta.get_field(name) for name in fields]
+                self.execute(self._create_unique_sql(model, unique_fields))
+        for constraint in model._meta.constraints:
+            if isinstance(constraint, UniqueConstraint) and field.name in constraint.fields:
+                self._validate_supported_constraint(constraint)
+                self.execute(constraint.create_sql(model, self))
+        if field.remote_field and field.db_constraint:
+            self.execute(self._informational_fk_sql(model, field))
+        for relation in model._meta.related_objects:
+            related_field = relation.field
+            if (
+                related_field.db_constraint
+                and related_field.target_field.name == field.name
+            ):
+                self.execute(
+                    self._informational_fk_sql(relation.related_model, related_field)
+                )
+
+    def _validate_recreation(self, model, new_field):
+        if getattr(new_field, "generated", False):
+            raise NotSupportedError("Amazon Redshift generated fields are unsupported.")
+        if self._has_db_default(new_field) and not self._literal_db_default(new_field):
+            raise NotSupportedError("Amazon Redshift expression db_default is unsupported.")
+        if not new_field.null and not self._has_usable_add_default(new_field):
+            raise NotSupportedError(
+                f"Cannot recreate non-null field {model._meta.label}.{new_field.name} "
+                "without a literal default."
+            )
+        if new_field.name in self._table_key_field_names(model):
+            raise NotSupportedError(
+                f"Cannot recreate Redshift table-key field "
+                f"{model._meta.label}.{new_field.name}."
+            )
+        for constraint in model._meta.constraints:
+            if isinstance(constraint, UniqueConstraint) and new_field.name in constraint.fields:
+                self._validate_supported_constraint(constraint)
+
+    def _recreate_column(self, model, old_field, new_field):
+        self._validate_recreation(model, new_field)
+        temporary = self._column_for_add(new_field)
+        temporary.column = f"{new_field.column}_tmp"
+        definition, params = self.column_sql(model, temporary, include_default=True)
+        self.execute(
+            self.sql_create_column
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "column": self.quote_name(temporary.column),
+                "definition": definition,
+            },
+            params,
+        )
+        self.execute(
+            "UPDATE %(table)s SET %(temporary)s = %(value)s "
+            "WHERE %(old)s IS NOT NULL"
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "temporary": self.quote_name(temporary.column),
+                "value": self._conversion_sql(old_field, new_field),
+                "old": self.quote_name(old_field.column),
+            }
+        )
+        self.execute(
+            self.sql_delete_column
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "column": self.quote_name(old_field.column),
+            }
+        )
+        self.execute(
+            self.sql_rename_column
+            % {
+                "table": self.quote_name(model._meta.db_table),
+                "old_column": self.quote_name(temporary.column),
+                "new_column": self.quote_name(new_field.column),
+                "type": new_field.db_parameters(connection=self.connection)["type"],
+            }
+        )
+        self._recreate_state_constraints(model, new_field)
+
+    def _alter_field(
+        self,
+        model,
+        old_field,
+        new_field,
+        old_type,
+        new_type,
+        old_db_params,
+        new_db_params,
+        strict=False,
+    ):
+        direct_varchar_change = self._can_alter_varchar_directly(
+            old_field,
+            new_field,
+            old_type,
+            new_type,
+        )
+        physical_change = (
+            old_type != new_type
+            or old_field.null != new_field.null
+            or old_field.unique != new_field.unique
+            or old_field.primary_key != new_field.primary_key
+            or self._has_db_default(old_field) != self._has_db_default(new_field)
+            or (
+                self._has_db_default(old_field)
+                and old_field.db_default != new_field.db_default
+            )
+            or (
+                bool(old_field.remote_field) != bool(new_field.remote_field)
+                or getattr(old_field, "db_constraint", None)
+                != getattr(new_field, "db_constraint", None)
+            )
+        )
+        if physical_change and not direct_varchar_change:
+            self._validate_recreation(model, new_field)
+        if old_field.column != new_field.column:
+            self.execute(
+                self._rename_field_sql(
+                    model._meta.db_table,
+                    old_field,
+                    new_field,
+                    new_type,
+                )
+            )
+            for sql in self.deferred_sql:
+                if isinstance(sql, Statement):
+                    sql.rename_column_references(
+                        model._meta.db_table,
+                        old_field.column,
+                        new_field.column,
+                    )
+            old_field = copy.copy(old_field)
+            old_field.column = new_field.column
+        if direct_varchar_change:
+            if old_type != new_type:
+                self.execute(
+                    self.sql_alter_column_type
+                    % {
+                        "table": self.quote_name(model._meta.db_table),
+                        "column": self.quote_name(new_field.column),
+                        "type": new_type,
+                    }
+                )
+            return
+        if physical_change:
+            self._recreate_column(model, old_field, new_field)
+
+    def remove_field(self, model, field):
+        try:
+            return super().remove_field(model, field)
+        except ProgrammingError as error:
+            if "cannot drop sortkey" not in str(error).lower():
+                raise
+            if self.connection.errors_occurred:
+                self.connection.close()
+                self.connection.connect()
+            self.execute(
+                "ALTER TABLE %(table)s ALTER SORTKEY NONE"
+                % {"table": self.quote_name(model._meta.db_table)}
+            )
+            return super().remove_field(model, field)
 
     def create_model(self, model):
         self._validate_model_ddl(model)
