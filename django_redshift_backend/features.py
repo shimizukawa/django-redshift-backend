@@ -73,8 +73,8 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_comments = False
     supports_comments_inline = False
 
-    supports_default_keyword_in_insert = False
-    supports_default_keyword_in_bulk_insert = False
+    supports_default_keyword_in_insert = True
+    supports_default_keyword_in_bulk_insert = True
     supports_nulls_distinct_unique_constraints = False
     supports_paramstyle_pyformat = False
     supports_inspectdb = False
