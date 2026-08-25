@@ -11,6 +11,7 @@ from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
 from django_redshift_backend.client import DatabaseClient
 from django_redshift_backend.creation import DatabaseCreation
+from django_redshift_backend.features import DatabaseFeatures
 
 
 class FakeCursor:
@@ -71,6 +72,7 @@ def test_wrapper_registers_foundation_components():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     assert wrapper.client.__class__.__name__ == "DatabaseClient"
     assert isinstance(wrapper.creation, DatabaseCreation)
+    assert isinstance(wrapper.features, DatabaseFeatures)
 
 
 def test_wrapper_compiles_exact_lookup_through_django_orm():

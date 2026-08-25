@@ -1,5 +1,4 @@
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
@@ -9,6 +8,7 @@ from django.db.utils import NotSupportedError
 from . import driver
 from .client import DatabaseClient
 from .creation import DatabaseCreation
+from .features import DatabaseFeatures
 
 
 class FetchmanyListMixin:
@@ -31,7 +31,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     client_class = DatabaseClient
     creation_class = DatabaseCreation
-    features_class = BaseDatabaseFeatures
+    features_class = DatabaseFeatures
     introspection_class = BaseDatabaseIntrospection
     ops_class = BaseDatabaseOperations
     SchemaEditorClass = BaseDatabaseSchemaEditor
