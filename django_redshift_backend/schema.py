@@ -256,7 +256,29 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         match = self._varchar_re.fullmatch(db_type or "")
         return int(match.group(1)) if match else None
 
-    def _can_alter_varchar_directly(self, old_field, new_field, old_type, new_type):
+    def _relation_signature(self, field):
+        if field.remote_field is None:
+            return None
+        target = field.remote_field.model
+        target_meta = getattr(target, "_meta", None)
+        target_label = target_meta.label_lower if target_meta else str(target)
+        return target_label, field.remote_field.field_name
+
+    def _has_constrained_incoming_fk(self, model, field):
+        return any(
+            relation.field.db_constraint
+            and relation.field.target_field.column == field.column
+            for relation in model._meta.related_objects
+        )
+
+    def _can_alter_varchar_directly(
+        self,
+        model,
+        old_field,
+        new_field,
+        old_type,
+        new_type,
+    ):
         old_length = self._varchar_length(old_type)
         new_length = self._varchar_length(new_type)
         return (
@@ -268,6 +290,12 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             and old_field.primary_key == new_field.primary_key
             and not self._has_db_default(old_field)
             and not self._has_db_default(new_field)
+            and self._relation_signature(old_field)
+            == self._relation_signature(new_field)
+            and getattr(old_field, "db_constraint", None)
+            == getattr(new_field, "db_constraint", None)
+            and not (old_field.remote_field and old_field.db_constraint)
+            and not self._has_constrained_incoming_fk(model, old_field)
         )
 
     def _conversion_sql(self, old_field, new_field):
@@ -280,18 +308,32 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             return f"{old_column}::varbyte"
         return old_column
 
-    def _table_key_field_names(self, model):
-        names = {
-            value.removeprefix("-")
+    def _resolve_table_key_column(self, model, declaration):
+        key_name = declaration.removeprefix("-")
+        for field in model._meta.local_fields:
+            if key_name in {field.name, field.attname, field.column}:
+                return field.column
+        raise NotSupportedError(
+            f"Cannot resolve Redshift table-key declaration {declaration!r} "
+            f"on {model._meta.label}."
+        )
+
+    def _table_key_columns(self, model):
+        declarations = [
+            value
             for value in model._meta.ordering
             if isinstance(value, SortKey)
-        }
-        names.update(
-            index.fields[0]
+        ]
+        declarations.extend(
+            field_name
             for index in model._meta.indexes
-            if isinstance(index, DistKey) and len(index.fields) == 1
+            if isinstance(index, DistKey)
+            for field_name in index.fields
         )
-        return names
+        return {
+            self._resolve_table_key_column(model, declaration)
+            for declaration in declarations
+        }
 
     def _recreate_state_constraints(self, model, field):
         if field.primary_key:
@@ -318,7 +360,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                     self._informational_fk_sql(relation.related_model, related_field)
                 )
 
-    def _validate_recreation(self, model, new_field):
+    def _validate_recreation(self, model, old_field, new_field):
         if getattr(new_field, "generated", False):
             raise NotSupportedError("Amazon Redshift generated fields are unsupported.")
         if self._has_db_default(new_field) and not self._literal_db_default(new_field):
@@ -328,7 +370,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 f"Cannot recreate non-null field {model._meta.label}.{new_field.name} "
                 "without a literal default."
             )
-        if new_field.name in self._table_key_field_names(model):
+        if old_field.column in self._table_key_columns(model):
             raise NotSupportedError(
                 f"Cannot recreate Redshift table-key field "
                 f"{model._meta.label}.{new_field.name}."
@@ -338,7 +380,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 self._validate_supported_constraint(constraint)
 
     def _recreate_column(self, model, old_field, new_field):
-        self._validate_recreation(model, new_field)
+        self._validate_recreation(model, old_field, new_field)
         temporary = self._column_for_add(new_field)
         temporary.column = f"{new_field.column}_tmp"
         definition, params = self.column_sql(model, temporary, include_default=True)
@@ -391,6 +433,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         strict=False,
     ):
         direct_varchar_change = self._can_alter_varchar_directly(
+            model,
             old_field,
             new_field,
             old_type,
@@ -413,7 +456,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             )
         )
         if physical_change and not direct_varchar_change:
-            self._validate_recreation(model, new_field)
+            self._validate_recreation(model, old_field, new_field)
         if old_field.column != new_field.column:
             self.execute(
                 self._rename_field_sql(

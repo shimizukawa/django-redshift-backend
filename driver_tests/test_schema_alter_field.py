@@ -4,6 +4,8 @@ import pytest
 from django.db import models
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.ddl_references import Columns, Statement
+from django.db.migrations.operations.fields import RenameField
+from django.db.migrations.state import ModelState, ProjectState
 from django.db.models import Value
 from django.db.utils import NotSupportedError, ProgrammingError
 from django.test.utils import isolate_apps
@@ -36,6 +38,16 @@ def assert_preflight_failure(model, old_field, new_field, match):
         editor.alter_field(model, old_field, new_field)
     assert editor.collected_sql == []
     assert editor.deferred_sql == []
+
+
+def model_from_state(state, name):
+    return state.apps.get_model("driver_tests", name)
+
+
+def state_with_model(name, fields, options=None):
+    state = ProjectState()
+    state.add_model(ModelState("driver_tests", name, fields, options=options))
+    return state
 
 
 @isolate_apps("driver_tests")
@@ -291,25 +303,6 @@ def test_recreation_of_table_key_field_fails_before_sql(meta_option):
 
 
 @isolate_apps("driver_tests")
-def test_renamed_table_key_recreation_fails_before_sql():
-    class Pony(models.Model):
-        name = models.CharField(max_length=20, null=True)
-
-        class Meta:
-            app_label = "driver_tests"
-            ordering = [SortKey("name")]
-
-    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
-    editor.deferred_sql = []
-    old_field = _field_for(Pony, models.CharField(max_length=20, null=True), "old")
-    new_field = _field_for(Pony, models.CharField(max_length=10, null=True), "name")
-    with pytest.raises(NotSupportedError, match="table-key"):
-        editor.alter_field(Pony, old_field, new_field)
-    assert editor.collected_sql == []
-    assert editor.deferred_sql == []
-
-
-@isolate_apps("driver_tests")
 def test_recreation_rebuilds_state_known_unique_constraints():
     class Pony(models.Model):
         name = models.CharField(max_length=20, null=True)
@@ -366,6 +359,238 @@ def test_recreation_rebuilds_outgoing_and_incoming_informational_foreign_keys():
         models.ForeignKey(Parent, models.CASCADE, null=True),
     )
     assert any('FOREIGN KEY ("name_id")' in statement for statement in outgoing_sql)
+
+
+def test_migration_state_renamed_sortkey_recreation_fails_before_sql(monkeypatch):
+    from_state = state_with_model(
+        "Pony",
+        [
+            ("id", models.AutoField(primary_key=True)),
+            ("label", models.CharField(max_length=20, null=True)),
+        ],
+        {"ordering": [SortKey("label")]},
+    )
+    to_state = state_with_model(
+        "Pony",
+        [
+            ("id", models.AutoField(primary_key=True)),
+            ("renamed", models.CharField(max_length=10, null=True)),
+        ],
+        {"ordering": [SortKey("renamed")]},
+    )
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    monkeypatch.setattr(RenameField, "allow_migrate_model", lambda *args: True)
+
+    with pytest.raises(NotSupportedError, match="table-key"):
+        RenameField("Pony", "label", "renamed").database_forwards(
+            "driver_tests",
+            editor,
+            from_state,
+            to_state,
+        )
+
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+@pytest.mark.parametrize(
+    ("declaration", "db_column"),
+    [
+        ("customer", None),
+        ("customer_id", None),
+        ("warehouse_customer", "warehouse_customer"),
+    ],
+)
+def test_migration_state_distkey_alias_recreation_fails_before_sql(
+    declaration,
+    db_column,
+):
+    def state_for(field_name, db_constraint, field_db_column):
+        state = ProjectState()
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Customer",
+                [("id", models.AutoField(primary_key=True))],
+            )
+        )
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Pony",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    (
+                        field_name,
+                            models.ForeignKey(
+                                "driver_tests.Customer",
+                                models.CASCADE,
+                                null=True,
+                                db_constraint=db_constraint,
+                                db_column=field_db_column,
+                            ),
+                    ),
+                ],
+                options={
+                    "indexes": [
+                        DistKey(
+                            fields=[declaration],
+                            name="pony_customer_distkey",
+                        )
+                    ]
+                },
+            )
+        )
+        return state
+
+    from_state = state_for("customer", True, db_column)
+    to_state = state_for("account", False, None)
+    from_model = model_from_state(from_state, "Pony")
+    to_model = model_from_state(to_state, "Pony")
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+
+    with pytest.raises(NotSupportedError, match="table-key"):
+        editor.alter_field(
+            from_model,
+            from_model._meta.get_field("customer"),
+            to_model._meta.get_field("account"),
+        )
+
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+def test_migration_state_unknown_table_key_fails_before_sql():
+    state = state_with_model(
+        "Pony",
+        [
+            ("id", models.AutoField(primary_key=True)),
+            ("label", models.CharField(max_length=20, null=True)),
+        ],
+        {"ordering": [SortKey("missing")]},
+    )
+    model = model_from_state(state, "Pony")
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    old_field = model._meta.get_field("label")
+    new_field = models.CharField(max_length=10, null=True)
+    new_field.set_attributes_from_name("label")
+    new_field.model = model
+
+    with pytest.raises(NotSupportedError, match="resolve Redshift table-key"):
+        editor.alter_field(model, old_field, new_field)
+
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+def test_constrained_outgoing_fk_varchar_enlargement_recreates_column():
+    def state_for(field):
+        state = ProjectState()
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Customer",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("code", models.CharField(max_length=10, unique=True)),
+                ],
+            )
+        )
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Pony",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("customer", field),
+                ],
+            )
+        )
+        return state
+
+    from_model = model_from_state(
+        state_for(models.CharField(max_length=10, null=True)), "Pony"
+    )
+    to_model = model_from_state(
+        state_for(
+            models.ForeignKey(
+                "driver_tests.Customer",
+                models.CASCADE,
+                to_field="code",
+                null=True,
+            )
+        ),
+        "Pony",
+    )
+    sql = collect_schema_sql(
+        lambda editor: editor.alter_field(
+            from_model,
+            from_model._meta.get_field("customer"),
+            to_model._meta.get_field("customer"),
+        )
+    )
+
+    assert any("ADD COLUMN" in statement for statement in sql)
+    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert any('FOREIGN KEY ("customer_id")' in statement for statement in sql[4:])
+
+
+def test_incoming_fk_varchar_enlargement_recreates_referenced_column():
+    def state_for(max_length):
+        state = ProjectState()
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Customer",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    (
+                        "code",
+                        models.CharField(
+                            max_length=max_length,
+                            null=True,
+                            unique=True,
+                        ),
+                    ),
+                ],
+            )
+        )
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Pony",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    (
+                        "customer",
+                        models.ForeignKey(
+                            "driver_tests.Customer",
+                            models.CASCADE,
+                            to_field="code",
+                            null=True,
+                        ),
+                    ),
+                ],
+            )
+        )
+        return state
+
+    from_model = model_from_state(state_for(10), "Customer")
+    to_model = model_from_state(state_for(20), "Customer")
+    sql = collect_schema_sql(
+        lambda editor: editor.alter_field(
+            from_model,
+            from_model._meta.get_field("code"),
+            to_model._meta.get_field("code"),
+        )
+    )
+
+    assert sql[0].startswith('ALTER TABLE "driver_tests_customer" ADD COLUMN')
+    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert any('FOREIGN KEY ("customer_id")' in statement for statement in sql[4:])
 
 
 @isolate_apps("driver_tests")
