@@ -132,8 +132,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             return f"MOD(EXTRACT(DOW FROM {sql}) + 6, 7) + 1", params
         if lookup_type == "iso_year":
             return (
-                "EXTRACT(YEAR FROM "
-                f"DATE_TRUNC('week', {sql}) + INTERVAL '3 day')",
+                "EXTRACT(YEAR FROM " f"DATE_TRUNC('week', {sql}) + INTERVAL '3 day')",
                 params,
             )
         date_part = self._validated_date_part(lookup_type)
