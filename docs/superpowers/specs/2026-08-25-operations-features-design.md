@@ -1,6 +1,6 @@
 # Operations and Features Design
 
-**Status:** Approved direction recorded on 2026-08-25; pending written-spec review.
+**Status:** Approved for implementation on 2026-08-25.
 
 ## Goal
 
