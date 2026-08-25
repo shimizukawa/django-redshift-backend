@@ -85,7 +85,9 @@ def test_new_connection_delegates_to_driver(monkeypatch):
     wrapper = DatabaseWrapper(settings_dict(), "default")
     expected = object()
     calls = []
-    monkeypatch.setattr(driver, "connect", lambda **kwargs: calls.append(kwargs) or expected)
+    monkeypatch.setattr(
+        driver, "connect", lambda **kwargs: calls.append(kwargs) or expected
+    )
     params = {"user": "alice", "password": "secret"}
     assert wrapper.get_new_connection(params) is expected
     assert calls == [params]

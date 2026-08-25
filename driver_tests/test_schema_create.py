@@ -228,7 +228,8 @@ def test_create_model_rejects_model_comment_before_collecting_sql():
 
 
 @pytest.mark.skipif(
-    not hasattr(models, "GeneratedField"), reason="Django does not expose GeneratedField"
+    not hasattr(models, "GeneratedField"),
+    reason="Django does not expose GeneratedField",
 )
 @isolate_apps("driver_tests")
 def test_create_model_rejects_generated_field_before_collecting_sql():

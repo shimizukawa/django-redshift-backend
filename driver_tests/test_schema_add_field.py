@@ -210,7 +210,8 @@ def test_add_expression_db_default_fails_without_sql_state():
 
 
 @pytest.mark.skipif(
-    not hasattr(models, "GeneratedField"), reason="Django does not expose GeneratedField"
+    not hasattr(models, "GeneratedField"),
+    reason="Django does not expose GeneratedField",
 )
 @isolate_apps("driver_tests")
 def test_add_generated_field_fails_without_sql_state():
@@ -246,7 +247,11 @@ def test_add_generated_field_fails_without_sql_state():
 )
 @isolate_apps("driver_tests")
 def test_add_unsupported_field_ddl_fails_without_sql_state(label, factory):
-    parameter = {"tablespace": "db_tablespace", "comment": "db_comment", "collation": "db_collation"}[label]
+    parameter = {
+        "tablespace": "db_tablespace",
+        "comment": "db_comment",
+        "collation": "db_collation",
+    }[label]
     if parameter not in inspect.signature(models.Field.__init__).parameters:
         pytest.skip(f"Django does not expose {parameter}")
 

@@ -57,6 +57,7 @@ Contents
 .. toctree::
 
    basic
+   schema-migrations
    refs
    dev
    design

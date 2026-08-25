@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
 from django.db import models
@@ -15,6 +16,9 @@ from django_redshift_backend.schema_django42 import (
 from .schema_helpers import make_wrapper
 
 
+SCHEMA_ROOT = Path(__file__).parents[1] / "django_redshift_backend"
+
+
 class VarcharContractModel(models.Model):
     name = models.CharField(max_length=10)
     body = models.TextField()
@@ -25,6 +29,22 @@ class VarcharContractModel(models.Model):
 
 def test_schema_editor_uses_installed_public_base_class():
     assert issubclass(DatabaseSchemaEditor, BaseDatabaseSchemaEditor)
+
+
+def test_new_schema_path_has_no_vendored_or_psycopg2_dependency():
+    source = "\n".join(
+        (SCHEMA_ROOT / name).read_text(encoding="utf-8")
+        for name in ("schema.py", "schema_django42.py", "_backend.py")
+    )
+    assert "_vendor" not in source
+    assert "psycopg2" not in source
+    assert "django.db.backends.postgresql" not in source
+
+
+def test_schema_editor_does_not_copy_django_alter_field_commentary():
+    source = (SCHEMA_ROOT / "schema.py").read_text(encoding="utf-8")
+    assert "BASED FROM" not in source
+    assert "four_way_default_alteration" not in source
 
 
 def test_django42_selection_is_one_deletion_oriented_branch():
@@ -48,7 +68,9 @@ def test_redshift_data_types_and_identity_suffixes_are_explicit():
     assert _backend.DatabaseWrapper.data_types["TextField"] == "varchar(max)"
     assert _backend.DatabaseWrapper.data_types["UUIDField"] == "varchar(36)"
     assert _backend.DatabaseWrapper.data_types["JSONField"] == "varchar"
-    assert _backend.DatabaseWrapper.data_types["BinaryField"] == "varbyte(%(max_length)s)"
+    assert (
+        _backend.DatabaseWrapper.data_types["BinaryField"] == "varbyte(%(max_length)s)"
+    )
     assert _backend.DatabaseWrapper.data_types_suffix == {
         "AutoField": "identity(1, 1)",
         "BigAutoField": "identity(1, 1)",
@@ -86,5 +108,8 @@ def test_column_sql_multiplies_only_bounded_varchar_lengths():
 
     assert name_sql.startswith("varchar(30)")
     assert body_sql.startswith("varchar(max)")
-    assert editor._multiply_bounded_varchar_lengths("integer NOT NULL") == "integer NOT NULL"
+    assert (
+        editor._multiply_bounded_varchar_lengths("integer NOT NULL")
+        == "integer NOT NULL"
+    )
     assert editor._multiply_bounded_varchar_lengths(None) is None

@@ -42,4 +42,6 @@ def test_cursor_exposes_required_dbapi_surface():
 
 
 def test_named_server_side_cursor_is_not_a_public_driver_contract():
-    assert "name" not in inspect.signature(redshift_connector.Connection.cursor).parameters
+    assert (
+        "name" not in inspect.signature(redshift_connector.Connection.cursor).parameters
+    )
