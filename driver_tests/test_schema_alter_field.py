@@ -79,7 +79,9 @@ def test_unique_varchar_enlargement_recreates_and_rebuilds_unique_constraint():
     )
 
     assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
-    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert not any(
+        "ALTER COLUMN" in statement and " TYPE " in statement for statement in sql
+    )
     assert any('UNIQUE ("code")' in statement for statement in sql[4:])
 
 
@@ -100,7 +102,9 @@ def test_primary_key_varchar_enlargement_recreates_and_rebuilds_primary_key():
 
     assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
     assert "DEFAULT '' NOT NULL" in sql[0]
-    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert not any(
+        "ALTER COLUMN" in statement and " TYPE " in statement for statement in sql
+    )
     assert any('PRIMARY KEY ("code")' in statement for statement in sql[4:])
 
 
@@ -189,11 +193,14 @@ def test_python_default_only_change_emits_no_sql():
         class Meta:
             app_label = "driver_tests"
 
-    assert alter_sql(
-        Pony,
-        models.CharField(max_length=10, null=True, default="old"),
-        models.CharField(max_length=10, null=True, default="new"),
-    ) == []
+    assert (
+        alter_sql(
+            Pony,
+            models.CharField(max_length=10, null=True, default="old"),
+            models.CharField(max_length=10, null=True, default="new"),
+        )
+        == []
+    )
 
 
 @pytest.mark.skipif(
@@ -211,7 +218,10 @@ def test_nullable_literal_db_default_change_recreates_with_new_default():
         models.IntegerField(null=True, db_default=Value(1)),
         models.IntegerField(null=True, db_default=Value(2)),
     )
-    assert sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer DEFAULT 2 NULL;'
+    assert (
+        sql[0]
+        == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer DEFAULT 2 NULL;'
+    )
 
 
 @pytest.mark.skipif(
@@ -229,7 +239,9 @@ def test_nullable_literal_db_default_drop_recreates_without_default():
         models.IntegerField(null=True, db_default=Value(1)),
         models.IntegerField(null=True),
     )
-    assert sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer NULL;'
+    assert (
+        sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer NULL;'
+    )
 
 
 @pytest.mark.skipif(
@@ -261,7 +273,10 @@ def test_nullable_to_nonnull_recreates_with_literal_default():
         models.IntegerField(null=True),
         models.IntegerField(default=4),
     )
-    assert sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer DEFAULT 4 NOT NULL;'
+    assert (
+        sql[0]
+        == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer DEFAULT 4 NOT NULL;'
+    )
 
 
 @isolate_apps("driver_tests")
@@ -289,7 +304,9 @@ def test_nonnull_to_nullable_recreates_without_default():
         models.IntegerField(default=4),
         models.IntegerField(null=True),
     )
-    assert sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer NULL;'
+    assert (
+        sql[0] == 'ALTER TABLE "driver_tests_pony" ADD COLUMN "name_tmp" integer NULL;'
+    )
 
 
 @isolate_apps("driver_tests")
@@ -300,9 +317,7 @@ def test_rename_uses_base_redshift_sql_and_updates_deferred_references():
 
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
     old_field = _field_for(Pony, models.CharField(max_length=10, null=True), "old")
-    new_field = _field_for(
-        Pony, models.CharField(max_length=10, null=True), "new"
-    )
+    new_field = _field_for(Pony, models.CharField(max_length=10, null=True), "new")
     deferred = Statement(
         "ALTER TABLE %(table)s ADD CONSTRAINT fake UNIQUE (%(columns)s)",
         table=editor.quote_name(Pony._meta.db_table),
@@ -364,7 +379,10 @@ def test_recreation_rebuilds_state_known_unique_constraints():
     assert " UNIQUE" not in sql[0]
     assert any('UNIQUE ("name")' in statement for statement in sql[4:])
     assert any('UNIQUE ("name", "herd")' in statement for statement in sql[4:])
-    assert any('CONSTRAINT "pony_name_unique" UNIQUE ("name")' in statement for statement in sql[4:])
+    assert any(
+        'CONSTRAINT "pony_name_unique" UNIQUE ("name")' in statement
+        for statement in sql[4:]
+    )
 
 
 @isolate_apps("driver_tests")
@@ -464,13 +482,13 @@ def test_migration_state_distkey_alias_recreation_fails_before_sql(
                     ("id", models.AutoField(primary_key=True)),
                     (
                         field_name,
-                            models.ForeignKey(
-                                "driver_tests.Customer",
-                                models.CASCADE,
-                                null=True,
-                                db_constraint=db_constraint,
-                                db_column=field_db_column,
-                            ),
+                        models.ForeignKey(
+                            "driver_tests.Customer",
+                            models.CASCADE,
+                            null=True,
+                            db_constraint=db_constraint,
+                            db_column=field_db_column,
+                        ),
                     ),
                 ],
                 options={
@@ -575,7 +593,9 @@ def test_constrained_outgoing_fk_varchar_enlargement_recreates_column():
     )
 
     assert any("ADD COLUMN" in statement for statement in sql)
-    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert not any(
+        "ALTER COLUMN" in statement and " TYPE " in statement for statement in sql
+    )
     assert any('FOREIGN KEY ("customer_id")' in statement for statement in sql[4:])
 
 
@@ -630,7 +650,9 @@ def test_incoming_fk_varchar_enlargement_recreates_referenced_column():
     )
 
     assert sql[0].startswith('ALTER TABLE "driver_tests_customer" ADD COLUMN')
-    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert not any(
+        "ALTER COLUMN" in statement and " TYPE " in statement for statement in sql
+    )
     assert any('FOREIGN KEY ("customer_id")' in statement for statement in sql[4:])
 
 
@@ -651,9 +673,13 @@ def test_remove_sortkey_column_retries_only_known_redshift_error(monkeypatch):
             raise ProgrammingError("cannot drop sortkey column")
 
     monkeypatch.setattr(BaseDatabaseSchemaEditor, "remove_field", remove_once)
-    monkeypatch.setattr(editor, "execute", lambda sql, params=(): calls.append(str(sql)))
+    monkeypatch.setattr(
+        editor, "execute", lambda sql, params=(): calls.append(str(sql))
+    )
     editor.remove_field(Pony, Pony._meta.get_field("name"))
-    assert any("ALTER SORTKEY NONE" in value for value in calls if isinstance(value, str))
+    assert any(
+        "ALTER SORTKEY NONE" in value for value in calls if isinstance(value, str)
+    )
     assert len([value for value in calls if isinstance(value, tuple)]) == 2
 
 
@@ -677,7 +703,9 @@ def test_remove_sortkey_column_reconnects_when_database_error_state_is_set(monke
     monkeypatch.setattr(BaseDatabaseSchemaEditor, "remove_field", remove_once)
     monkeypatch.setattr(editor.connection, "close", lambda: calls.append("close"))
     monkeypatch.setattr(editor.connection, "connect", lambda: calls.append("connect"))
-    monkeypatch.setattr(editor, "execute", lambda sql, params=(): calls.append(str(sql)))
+    monkeypatch.setattr(
+        editor, "execute", lambda sql, params=(): calls.append(str(sql))
+    )
     editor.remove_field(Pony, Pony._meta.get_field("name"))
     assert calls.count("close") == 1
     assert calls.count("connect") == 1

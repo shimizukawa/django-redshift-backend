@@ -82,12 +82,8 @@ def test_datetime_trunc_parameterizes_timezone():
 @override_settings(USE_TZ=True)
 def test_datetime_casts_preserve_timezone_params():
     ops = operations()
-    date_sql, date_params = ops.datetime_cast_date_sql(
-        "event_time", (), "Asia/Tokyo"
-    )
-    time_sql, time_params = ops.datetime_cast_time_sql(
-        "event_time", (), "Asia/Tokyo"
-    )
+    date_sql, date_params = ops.datetime_cast_date_sql("event_time", (), "Asia/Tokyo")
+    time_sql, time_params = ops.datetime_cast_time_sql("event_time", (), "Asia/Tokyo")
     assert date_sql == "(event_time AT TIME ZONE %s)::date"
     assert date_params == ("Asia/Tokyo",)
     assert time_sql == "(event_time AT TIME ZONE %s)::time"

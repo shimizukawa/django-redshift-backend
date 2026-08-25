@@ -22,7 +22,9 @@ def _check_constraint(*, name, condition):
 def _unsupported_constraints():
     constraints = [
         _check_constraint(name="value_check", condition=models.Q(value__gte=0)),
-        models.UniqueConstraint(models.functions.Lower("value"), name="lower_value_uniq"),
+        models.UniqueConstraint(
+            models.functions.Lower("value"), name="lower_value_uniq"
+        ),
         models.UniqueConstraint(
             fields=["value"],
             condition=models.Q(value__isnull=False),
@@ -141,7 +143,9 @@ def test_create_model_rejects_unsupported_constraint_before_collecting_sql():
 
         class Meta:
             app_label = "driver_tests"
-            constraints = [_check_constraint(name="value_check", condition=models.Q(value__gte=0))]
+            constraints = [
+                _check_constraint(name="value_check", condition=models.Q(value__gte=0))
+            ]
 
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
     editor.deferred_sql = []
@@ -158,7 +162,9 @@ def test_create_model_validates_constraints_before_ordinary_indexes():
 
         class Meta:
             app_label = "driver_tests"
-            constraints = [_check_constraint(name="value_check", condition=models.Q(value__gte=0))]
+            constraints = [
+                _check_constraint(name="value_check", condition=models.Q(value__gte=0))
+            ]
             indexes = [models.Index(fields=["value"], name="value_idx")]
 
     with pytest.raises(NotSupportedError, match="value_check"):
@@ -173,8 +179,15 @@ def test_alter_index_together_rejects_changes_and_keeps_equal_sets_as_noop():
         class Meta:
             app_label = "driver_tests"
 
-    assert collect_schema_sql(
-        lambda editor: editor.alter_index_together(Event, {("value",)}, {("value",)})
-    ) == []
+    assert (
+        collect_schema_sql(
+            lambda editor: editor.alter_index_together(
+                Event, {("value",)}, {("value",)}
+            )
+        )
+        == []
+    )
     with pytest.raises(NotSupportedError, match="driver_tests.Event"):
-        collect_schema_sql(lambda editor: editor.alter_index_together(Event, set(), {("value",)}))
+        collect_schema_sql(
+            lambda editor: editor.alter_index_together(Event, set(), {("value",)})
+        )

@@ -95,7 +95,8 @@ def test_runshell_ignores_sigint_for_the_superclass_call_and_restores_it(monkeyp
     monkeypatch.setattr(
         signal,
         "getsignal",
-        lambda signal_number: calls.append(("getsignal", signal_number)) or original_handler,
+        lambda signal_number: calls.append(("getsignal", signal_number))
+        or original_handler,
     )
     monkeypatch.setattr(
         signal,
@@ -125,7 +126,8 @@ def test_runshell_restores_sigint_when_the_superclass_raises(monkeypatch):
     monkeypatch.setattr(
         signal,
         "getsignal",
-        lambda signal_number: calls.append(("getsignal", signal_number)) or original_handler,
+        lambda signal_number: calls.append(("getsignal", signal_number))
+        or original_handler,
     )
     monkeypatch.setattr(
         signal,
