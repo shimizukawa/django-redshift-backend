@@ -64,6 +64,47 @@ def test_varchar_enlargement_uses_one_direct_type_statement():
 
 
 @isolate_apps("driver_tests")
+def test_unique_varchar_enlargement_recreates_and_rebuilds_unique_constraint():
+    class Pony(models.Model):
+        code = models.CharField(max_length=10, null=True, unique=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.CharField(max_length=10, null=True, unique=True),
+        models.CharField(max_length=20, null=True, unique=True),
+        name="code",
+    )
+
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
+    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert any('UNIQUE ("code")' in statement for statement in sql[4:])
+
+
+@isolate_apps("driver_tests")
+def test_primary_key_varchar_enlargement_recreates_and_rebuilds_primary_key():
+    class Pony(models.Model):
+        code = models.CharField(max_length=10, primary_key=True, default="")
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.CharField(max_length=10, primary_key=True, default=""),
+        models.CharField(max_length=20, primary_key=True, default=""),
+        name="code",
+    )
+
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
+    assert "DEFAULT '' NOT NULL" in sql[0]
+    assert not any("ALTER COLUMN" in statement and " TYPE " in statement for statement in sql)
+    assert any('PRIMARY KEY ("code")' in statement for statement in sql[4:])
+
+
+@isolate_apps("driver_tests")
 def test_varchar_reduction_recreates_nullable_column_in_four_statements():
     class Pony(models.Model):
         class Meta:

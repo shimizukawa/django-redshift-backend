@@ -288,6 +288,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             and old_field.null == new_field.null
             and old_field.unique == new_field.unique
             and old_field.primary_key == new_field.primary_key
+            and not old_field.unique
+            and not new_field.unique
+            and not old_field.primary_key
+            and not new_field.primary_key
             and not self._has_db_default(old_field)
             and not self._has_db_default(new_field)
             and self._relation_signature(old_field)
