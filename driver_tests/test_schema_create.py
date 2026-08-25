@@ -8,7 +8,7 @@ from django.test.utils import isolate_apps, override_settings
 
 from django_redshift_backend import DistKey, SortKey
 
-from .schema_helpers import collect_schema_sql
+from .schema_helpers import collect_schema_sql, make_wrapper
 
 
 @isolate_apps("driver_tests")
@@ -86,6 +86,40 @@ def test_create_model_rejects_more_than_one_distkey():
 
     with pytest.raises(ValueError, match="more than one DistKey"):
         collect_schema_sql(lambda editor: editor.create_model(DuplicateKey))
+
+
+@isolate_apps("driver_tests")
+def test_invalid_distkey_leaves_no_collected_or_deferred_sql():
+    class InvalidKey(models.Model):
+        first = models.IntegerField()
+        second = models.IntegerField()
+
+        class Meta:
+            app_label = "driver_tests"
+            indexes = [DistKey(fields=["first", "second"], name="invalid_distkey")]
+            unique_together = [("first", "second")]
+
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    with pytest.raises(ValueError, match="exactly one field"):
+        editor.create_model(InvalidKey)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+@isolate_apps("driver_tests")
+def test_table_sql_validates_invalid_distkey_without_create_model():
+    class InvalidKey(models.Model):
+        name = models.CharField(max_length=20)
+
+        class Meta:
+            app_label = "driver_tests"
+            indexes = [DistKey(fields=["name"], name="invalid_distkey")]
+
+    InvalidKey._meta.indexes[0].fields = []
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    with pytest.raises(ValueError, match="exactly one field"):
+        editor.table_sql(InvalidKey)
 
 
 @isolate_apps("driver_tests")
