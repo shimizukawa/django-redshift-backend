@@ -71,7 +71,22 @@ def test_add_callable_default_fails_without_freezing_value_or_sql_state():
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
     editor.deferred_sql = []
     field = _field_for(Pony, models.IntegerField(default=lambda: 7))
-    with pytest.raises(NotSupportedError, match="non-null.*default"):
+    with pytest.raises(NotSupportedError, match="callable default"):
+        editor.add_field(Pony, field)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+@isolate_apps("driver_tests")
+def test_add_nullable_callable_default_fails_without_freezing_value_or_sql_state():
+    class Pony(models.Model):
+        class Meta:
+            app_label = "driver_tests"
+
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    field = _field_for(Pony, models.IntegerField(null=True, default=lambda: 7))
+    with pytest.raises(NotSupportedError, match="callable default"):
         editor.add_field(Pony, field)
     assert editor.collected_sql == []
     assert editor.deferred_sql == []
@@ -154,6 +169,25 @@ def test_add_nonnull_field_keeps_literal_db_default():
     assert collect_schema_sql(lambda editor: editor.add_field(Pony, field)) == [
         'ALTER TABLE "driver_tests_pony" ADD COLUMN "name" integer DEFAULT 4 NOT NULL;'
     ]
+
+
+@pytest.mark.skipif(
+    "db_default" not in inspect.signature(models.Field.__init__).parameters,
+    reason="Django does not expose db_default",
+)
+@isolate_apps("driver_tests")
+def test_add_nonnull_field_with_null_literal_db_default_fails_without_sql_state():
+    class Pony(models.Model):
+        class Meta:
+            app_label = "driver_tests"
+
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    field = _field_for(Pony, models.IntegerField(db_default=Value(None)))
+    with pytest.raises(NotSupportedError, match="non-null.*default"):
+        editor.add_field(Pony, field)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
 
 
 @pytest.mark.skipif(
