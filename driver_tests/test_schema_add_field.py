@@ -118,6 +118,8 @@ def test_add_primary_key_field_strips_unsupported_inline_primary_key():
     field = _field_for(Pony, models.IntegerField(default=0, primary_key=True))
     sql = collect_schema_sql(lambda editor: editor.add_field(Pony, field))
     assert "PRIMARY KEY" not in sql[0]
+    assert any("PRIMARY KEY" in statement for statement in sql[1:])
+    assert not any(" UNIQUE" in statement for statement in sql[1:])
 
 
 @isolate_apps("driver_tests")

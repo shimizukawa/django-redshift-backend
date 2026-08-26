@@ -122,6 +122,31 @@ def test_table_sql_validates_invalid_distkey_without_create_model():
         editor.table_sql(InvalidKey)
 
 
+@pytest.mark.parametrize(
+    "option",
+    [
+        {"indexes": [DistKey(fields=["missing"], name="missing_distkey")]},
+        {"ordering": [SortKey("missing")]},
+    ],
+)
+@isolate_apps("driver_tests")
+def test_create_model_rejects_unknown_table_key_before_collecting_sql(option):
+    class InvalidKey(models.Model):
+        value = models.IntegerField()
+
+        class Meta:
+            app_label = "driver_tests"
+
+    for name, value in option.items():
+        setattr(InvalidKey._meta, name, value)
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    with pytest.raises(NotSupportedError, match="resolve Redshift table-key"):
+        editor.create_model(InvalidKey)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
 @isolate_apps("driver_tests")
 def test_create_model_rejects_ordinary_model_index_before_collecting_sql():
     class Indexed(models.Model):
@@ -225,6 +250,27 @@ def test_create_model_rejects_model_comment_before_collecting_sql():
 
     with pytest.raises(NotSupportedError, match="table comments"):
         collect_schema_sql(lambda editor: editor.create_model(Unsupported))
+
+
+@pytest.mark.skipif(
+    "db_default" not in inspect.signature(models.Field.__init__).parameters,
+    reason="Django does not expose db_default",
+)
+@isolate_apps("driver_tests")
+def test_create_model_rejects_expression_db_default_before_collecting_sql():
+    class Unsupported(models.Model):
+        value = models.IntegerField(db_default=models.F("other"))
+        other = models.IntegerField()
+
+        class Meta:
+            app_label = "driver_tests"
+
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    with pytest.raises(NotSupportedError, match="expression db_default"):
+        editor.create_model(Unsupported)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
 
 
 @pytest.mark.skipif(

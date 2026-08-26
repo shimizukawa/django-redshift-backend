@@ -14,7 +14,12 @@ database operation. Newly applied migrations now emit ``ALTER DISTKEY``. This
 is a correction for future migration application; it does not modify a table
 whose historical migration has already been recorded as applied.
 
-Inspect an existing table before deciding to repair it::
+Inspect an existing table's distribution style and key before deciding to
+repair it::
+
+    SELECT diststyle
+    FROM SVV_TABLE_INFO
+    WHERE "schema" = 'your_schema' AND "table" = 'your_table';
 
     SELECT "column", distkey
     FROM pg_table_def

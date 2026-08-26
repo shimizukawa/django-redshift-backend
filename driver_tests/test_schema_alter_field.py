@@ -8,7 +8,7 @@ from django.db.migrations.operations.fields import RenameField
 from django.db.migrations.state import ModelState, ProjectState
 from django.db.models import Value
 from django.db.utils import NotSupportedError, ProgrammingError
-from django.test.utils import isolate_apps
+from django.test.utils import isolate_apps, override_settings
 
 from django_redshift_backend import DistKey, SortKey
 
@@ -61,6 +61,91 @@ def test_varchar_enlargement_uses_one_direct_type_statement():
         models.CharField(max_length=10, null=True),
         models.CharField(max_length=20, null=True),
     ) == ['ALTER TABLE "driver_tests_pony" ALTER COLUMN "name" TYPE varchar(20);']
+
+
+@override_settings(REDSHIFT_VARCHAR_LENGTH_MULTIPLIER=3)
+@isolate_apps("driver_tests")
+def test_direct_varchar_enlargement_scales_physical_type_once():
+    class Pony(models.Model):
+        class Meta:
+            app_label = "driver_tests"
+
+    assert alter_sql(
+        Pony,
+        models.CharField(max_length=10, null=True),
+        models.CharField(max_length=20, null=True),
+    ) == ['ALTER TABLE "driver_tests_pony" ALTER COLUMN "name" TYPE varchar(60);']
+
+
+@isolate_apps("driver_tests")
+def test_fk_target_change_with_same_storage_type_recreates_and_rebuilds_fk():
+    class OwnerA(models.Model):
+        class Meta:
+            app_label = "driver_tests"
+
+    class OwnerB(models.Model):
+        class Meta:
+            app_label = "driver_tests"
+
+    class Pony(models.Model):
+        owner = models.ForeignKey(OwnerA, models.CASCADE, null=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.ForeignKey(OwnerA, models.CASCADE, null=True),
+        models.ForeignKey(OwnerB, models.CASCADE, null=True),
+        name="owner",
+    )
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
+    assert any(
+        'REFERENCES "driver_tests_ownerb" ("id")' in statement for statement in sql
+    )
+
+
+@isolate_apps("driver_tests")
+def test_fk_to_field_change_with_same_storage_type_recreates_and_rebuilds_fk():
+    class Owner(models.Model):
+        code = models.IntegerField(unique=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    class Pony(models.Model):
+        owner = models.ForeignKey(Owner, models.CASCADE, null=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.ForeignKey(Owner, models.CASCADE, null=True, to_field="id"),
+        models.ForeignKey(Owner, models.CASCADE, null=True, to_field="code"),
+        name="owner",
+    )
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
+    assert any(
+        'REFERENCES "driver_tests_owner" ("code")' in statement for statement in sql
+    )
+
+
+@isolate_apps("driver_tests")
+def test_recreation_uses_collision_free_temporary_column_name():
+    class Pony(models.Model):
+        name = models.CharField(max_length=20, null=True)
+        name_tmp = models.CharField(max_length=20, null=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.CharField(max_length=20, null=True),
+        models.CharField(max_length=10, null=True),
+    )
+    assert 'ADD COLUMN "name_tmp_1"' in sql[0]
 
 
 @isolate_apps("driver_tests")

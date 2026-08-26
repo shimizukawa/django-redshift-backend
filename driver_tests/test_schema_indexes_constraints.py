@@ -118,6 +118,59 @@ def test_simple_unique_constraint_is_informational_ddl():
     ]
 
 
+@pytest.mark.skipif(
+    not hasattr(models, "Deferrable"),
+    reason="Django does not expose deferrable constraints",
+)
+@pytest.mark.parametrize("method", ["add_constraint", "remove_constraint"])
+@isolate_apps("driver_tests")
+def test_deferrable_unique_constraint_fails_before_sql(method):
+    class Event(models.Model):
+        value = models.CharField(max_length=20)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    constraint = models.UniqueConstraint(
+        fields=["value"],
+        name="deferred_value_uniq",
+        deferrable=models.Deferrable.DEFERRED,
+    )
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    with pytest.raises(NotSupportedError, match=constraint.name):
+        getattr(editor, method)(Event, constraint)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
+@pytest.mark.skipif(
+    not hasattr(models, "Deferrable"),
+    reason="Django does not expose deferrable constraints",
+)
+@isolate_apps("driver_tests")
+def test_create_model_rejects_deferrable_unique_constraint_before_sql():
+    class Event(models.Model):
+        value = models.CharField(max_length=20)
+
+        class Meta:
+            app_label = "driver_tests"
+            constraints = [
+                models.UniqueConstraint(
+                    fields=["value"],
+                    name="deferred_value_uniq",
+                    deferrable=models.Deferrable.DEFERRED,
+                )
+            ]
+
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    with pytest.raises(NotSupportedError, match="deferred_value_uniq"):
+        editor.create_model(Event)
+    assert editor.collected_sql == []
+    assert editor.deferred_sql == []
+
+
 @pytest.mark.parametrize(
     "constraint",
     _unsupported_constraints(),

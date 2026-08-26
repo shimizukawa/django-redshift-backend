@@ -47,6 +47,16 @@ def test_schema_editor_does_not_copy_django_alter_field_commentary():
     assert "four_way_default_alteration" not in source
 
 
+def test_schema_migration_guide_checks_distribution_style_and_key():
+    guide = (Path(__file__).parents[1] / "doc" / "schema-migrations.rst").read_text(
+        encoding="utf-8"
+    )
+    assert "SVV_TABLE_INFO" in guide
+    assert "diststyle" in guide
+    assert "pg_table_def" in guide
+    assert "distkey" in guide
+
+
 def test_django42_selection_is_one_deletion_oriented_branch():
     assert _backend.schema_editor_class_for((4, 2, 30)) is DatabaseSchemaEditor42
     assert _backend.schema_editor_class_for((5, 2, 8)) is DatabaseSchemaEditor
