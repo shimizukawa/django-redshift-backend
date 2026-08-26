@@ -65,6 +65,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 raise NotSupportedError(
                     f"Amazon Redshift does not support {label} on {field.name}."
                 )
+        if self._has_db_default(field) and not self._literal_db_default(field):
+            raise NotSupportedError(
+                "Amazon Redshift expression db_default is unsupported."
+            )
 
     def _validate_model_ddl(self, model):
         if model._meta.db_tablespace:
@@ -90,9 +94,11 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 raise ValueError(
                     f"DistKey on model {model.__name__} must have exactly one field."
                 )
-            distkey_column = self._column_name(model, distkeys[0].fields[0])
+            distkey_column = self.quote_name(
+                self._resolve_table_key_column(model, distkeys[0].fields[0])
+            )
         sortkeys = [
-            self._column_name(model, value)
+            self.quote_name(self._resolve_table_key_column(model, value))
             for value in model._meta.ordering
             if isinstance(value, SortKey)
         ]
@@ -130,7 +136,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             raise ValueError(
                 f"DistKey on model {model.__name__} must have exactly one field."
             )
-        return self._column_name(model, index.fields[0])
+        return self.quote_name(self._resolve_table_key_column(model, index.fields[0]))
 
     def add_index(self, model, index, concurrently=False):
         if not isinstance(index, DistKey):
@@ -164,6 +170,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             and not constraint.include
             and not constraint.opclasses
             and getattr(constraint, "nulls_distinct", None) is None
+            and getattr(constraint, "deferrable", None) is None
         )
         if not supported:
             raise NotSupportedError(
@@ -252,7 +259,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             },
             params,
         )
-        if field.unique:
+        if field.primary_key:
+            self.execute(self._create_primary_key_sql(model, field))
+        elif field.unique:
             self.execute(self._create_unique_sql(model, [field]))
         if field.remote_field and field.db_constraint:
             self.execute(self._informational_fk_sql(model, field))
@@ -399,7 +408,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     def _recreate_column(self, model, old_field, new_field):
         self._validate_recreation(model, old_field, new_field)
         temporary = self._column_for_add(new_field)
-        temporary.column = f"{new_field.column}_tmp"
+        temporary.column = self._temporary_column_name(model, new_field.column)
         definition, params = self.column_sql(model, temporary, include_default=True)
         self.execute(
             self.sql_create_column
@@ -438,6 +447,24 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         )
         self._recreate_state_constraints(model, new_field)
 
+    def _temporary_column_name(self, model, column):
+        known_columns = {field.column for field in model._meta.local_fields}
+        maximum = self.connection.ops.max_name_length()
+        maximum = maximum if isinstance(maximum, int) and maximum > 0 else None
+        base = f"{column}_tmp"
+        attempt = 0
+        while True:
+            suffix = "" if attempt == 0 else f"_{attempt}"
+            if maximum is None:
+                candidate = f"{base}{suffix}"
+            elif len(suffix) >= maximum:
+                candidate = suffix[-maximum:]
+            else:
+                candidate = f"{base[: maximum - len(suffix)]}{suffix}"
+            if candidate not in known_columns:
+                return candidate
+            attempt += 1
+
     def _alter_field(
         self,
         model,
@@ -470,6 +497,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 bool(old_field.remote_field) != bool(new_field.remote_field)
                 or getattr(old_field, "db_constraint", None)
                 != getattr(new_field, "db_constraint", None)
+                or self._relation_signature(old_field)
+                != self._relation_signature(new_field)
             )
         )
         if physical_change and not direct_varchar_change:
@@ -499,7 +528,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                     % {
                         "table": self.quote_name(model._meta.db_table),
                         "column": self.quote_name(new_field.column),
-                        "type": new_type,
+                        "type": self._multiply_bounded_varchar_lengths(new_type),
                     }
                 )
             return
