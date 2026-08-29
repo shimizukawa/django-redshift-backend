@@ -1,13 +1,12 @@
 import django
-
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.utils import NotSupportedError
 
 from . import driver
 from .client import DatabaseClient
 from .creation import DatabaseCreation
 from .features import DatabaseFeatures
+from .introspection import DatabaseIntrospection
 from .operations import DatabaseOperations
 from .schema import DatabaseSchemaEditor
 
@@ -20,6 +19,16 @@ def schema_editor_class_for(version):
     return DatabaseSchemaEditor
 
 
+def introspection_class_for(version):
+    if version[:2] == (4, 2):
+        from .introspection_django42 import (
+            DatabaseIntrospection as DatabaseIntrospection42,
+        )
+
+        return DatabaseIntrospection42
+    return DatabaseIntrospection
+
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = "redshift"
     display_name = "Amazon Redshift"
@@ -28,7 +37,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     client_class = DatabaseClient
     creation_class = DatabaseCreation
     features_class = DatabaseFeatures
-    introspection_class = BaseDatabaseIntrospection
+    introspection_class = introspection_class_for(django.VERSION)
     ops_class = DatabaseOperations
     SchemaEditorClass = schema_editor_class_for(django.VERSION)
 

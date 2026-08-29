@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from django.db.backends.base.features import BaseDatabaseFeatures
+from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.backends.base.operations import BaseDatabaseOperations
 
 from django_redshift_backend import _backend, base
 from django_redshift_backend.features import DatabaseFeatures
 from django_redshift_backend.operations import DatabaseOperations
 from django_redshift_backend.schema import DatabaseSchemaEditor
-
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 
@@ -26,6 +26,16 @@ def test_new_components_are_internal_only():
 def test_new_components_use_only_public_base_classes():
     assert issubclass(DatabaseFeatures, BaseDatabaseFeatures)
     assert issubclass(DatabaseOperations, BaseDatabaseOperations)
+
+
+def test_new_introspection_is_internal_only():
+    assert issubclass(
+        _backend.DatabaseWrapper.introspection_class, BaseDatabaseIntrospection
+    )
+    assert _backend.DatabaseWrapper.introspection_class.__module__.startswith(
+        "django_redshift_backend.introspection"
+    )
+    assert base.DatabaseWrapper is not _backend.DatabaseWrapper
 
 
 def test_pull_request_104_compiler_copy_is_not_activated():
