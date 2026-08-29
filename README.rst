@@ -62,6 +62,11 @@ ENGINE for DATABASES is 'django_redshift_backend'. You can set the name in your 
 
 For more information, please refer: Documentation_
 
+Version 6 uses AWS's official ``redshift-connector`` driver and supports
+username/password authentication. Existing ``ENGINE = 'django_redshift_backend'``
+settings and ``DistKey``/``SortKey`` migration paths remain supported; upgrading
+does not create or apply a database migration.
+
 
 LICENSE
 =======
