@@ -3,36 +3,28 @@ Design Overview
 ===================
 
 Purpose
-===========
+========
 
 `django-redshift-backend` provides a backend for integrating Amazon Redshift database with the Django framework. It allows Django applications to use Redshift as their database while maintaining compatibility with Django's ORM and database abstraction layer.
 
-Background of the Changes to support Django 4.2
-=====================================================
+Version 6 architecture
+======================
 
-Amazon Redshift is forked from an older version of PostgreSQL. As a result, it is difficult to directly use Django's PostgreSQL database backend, especially with the newer versions of Django (4.2, 5.0) where compatibility issues arise.
-So, the current changes are aimed at supporting Django 4.2 by including Django 4.0 code.
+Version 6 uses AWS's official ``redshift-connector`` driver and Django's
+public database-backend APIs. The package no longer vendors Django's database
+backend implementation and does not depend on psycopg2. The public backend
+name remains ``django_redshift_backend`` so existing ``DATABASES`` settings
+continue to select the backend.
 
-Main Changes
------------------
-
-1. **Inclusion of Django 4.0 Code**:
-
-   - To ensure that the Redshift backend works with Django 4.2 and future versions (such as Django 5.0), we have included database-related code from Django 4.0 in the package.
-   - This avoids the difficulties in implementing the Redshift backend with Django 4.2's codebase.
-     Difficulties: https://github.com/jazzband/django-redshift-backend/pull/111
-
-2. **Ensuring Code Compatibility**:
-
-   - We have made necessary modifications and adjustments to ensure operation with Django 4.2 and later versions.
-   - Specific changes can be viewed at the following link: https://github.com/jazzband/django-redshift-backend/pull/129
+The initial release supports username/password authentication. IAM and
+identity-provider authentication are intentionally deferred.
 
 Key Components of django-redshift-backend
 =============================================
 
 1. **Custom Database Backend**
 
-   - Extends Django's PostgreSQL backend
+   - Extends Django public base backend classes
    - Implements Redshift-specific functionality
    - Handles differences between PostgreSQL and Redshift
 
@@ -54,10 +46,11 @@ Design Principles
 3. **Flexibility**: Support Redshift-specific features where possible
 
 Key Challenges
-====================
+==============
 
-1. **Version Compatibility**: 
-   Maintain compatibility with Redshift by using the database backend from Django 4.0, which is based on PostgreSQL 10 (no longer supported by Django). This ensures stable operation even with the latest Django versions.
+1. **Version Compatibility**:
+   Django 4.2.30 support uses a narrowly isolated compatibility path that can
+   be removed when that release line is no longer supported.
 
 2. **SQL Differences**: 
    Handle syntactical and functional differences between PostgreSQL and Redshift. Particularly, some PostgreSQL DDL (Data Definition Language) statements are not compatible with Redshift, requiring adjustments in areas such as table creation and constraint handling.
@@ -66,12 +59,12 @@ Key Challenges
    Map Django field types to appropriate Redshift data types. This is crucial as Redshift has different data types and limitations compared to standard PostgreSQL.
 
 Implementation Strategy
-============================
+=======================
 
-1. Use Django 4.0's PostgreSQL backend as the base for the custom Redshift backend
-2. Override necessary methods to implement Redshift-specific behavior
-3. Implement custom SQL compilation logic to generate Redshift-compatible SQL
-4. Develop schema editing logic that accounts for Redshift's limitations
+1. Use only Django's public backend base classes.
+2. Override the database operations and schema editor for Redshift SQL.
+3. Preserve public ``DistKey`` and ``SortKey`` migration serialization paths.
+4. Keep Django 4.2-only compatibility code isolated from common behavior.
 
 Testing and Validation
 ========================
@@ -84,9 +77,7 @@ Testing and Validation
 Future Considerations
 ============================
 
-1. Ongoing maintenance of the Django 4.0-based code to ensure continued compatibility with newer Django versions.
+1. Live verification against a real Redshift cluster remains a future task.
 
-2. Exploration of a potential re-implementation from scratch based on Django 4.2 or later. This would involve:
-
-   - Analyzing the feasibility of adapting to Django 4.2's database backend structure
-   - Evaluating the benefits and drawbacks of a complete rewrite
+2. Remove the isolated Django 4.2 compatibility path when support for that
+   release line is eventually dropped.
