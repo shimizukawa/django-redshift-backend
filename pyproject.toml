@@ -5,7 +5,7 @@ description = "Redshift database backend for Django"
 readme = "README.rst"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.9, <4"
+requires-python = ">=3.10, <4"
 authors = [
     { name = "shimizukawa", email = "shimizukawa@gmail.com" },
 ]
@@ -18,12 +18,12 @@ classifiers = [
     "Environment :: Plugins",
     "Framework :: Django",
     "Framework :: Django :: 4.2",
-    "Framework :: Django :: 5.0",
-    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
     "Intended Audience :: Developers",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -31,16 +31,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "django<5.2",
-    "backports.zoneinfo;python_version<'3.9'",
-]
-
-[project.optional-dependencies]
-psycopg2 = [
-    "psycopg2",
-]
-psycopg2-binary = [
-    "psycopg2-binary",
+    "django>=4.2.30,<6.2",
+    "redshift-connector>=2.1.14,<3",
 ]
 
 [dependency-groups]
@@ -76,8 +68,6 @@ include = ["django_redshift_backend*"]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 
-[tool.ruff]
-exclude = ["django_redshift_backend/_vendor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
