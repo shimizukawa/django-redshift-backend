@@ -19,6 +19,16 @@ def schema_editor_class_for(version):
     return DatabaseSchemaEditor
 
 
+def introspection_class_for(version):
+    if version[:2] == (4, 2):
+        from .introspection_django42 import (
+            DatabaseIntrospection as DatabaseIntrospection42,
+        )
+
+        return DatabaseIntrospection42
+    return DatabaseIntrospection
+
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = "redshift"
     display_name = "Amazon Redshift"
@@ -27,7 +37,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     client_class = DatabaseClient
     creation_class = DatabaseCreation
     features_class = DatabaseFeatures
-    introspection_class = DatabaseIntrospection
+    introspection_class = introspection_class_for(django.VERSION)
     ops_class = DatabaseOperations
     SchemaEditorClass = schema_editor_class_for(django.VERSION)
 
