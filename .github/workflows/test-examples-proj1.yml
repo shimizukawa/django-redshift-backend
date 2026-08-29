@@ -32,5 +32,4 @@ jobs:
       env:
         ENV_FILE: .env.psql
       run: |
-        python manage.py makemigrations testapp
         python manage.py sqlmigrate testapp 0001
