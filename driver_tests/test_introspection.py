@@ -145,3 +145,9 @@ def test_relations_include_no_on_delete_value_on_modern_django():
     relations = DatabaseIntrospection(mock.Mock()).get_relations(cursor, "orders")
 
     assert relations == {"customer_id": ("id", "customer", None)}
+
+
+def test_django42_selector_uses_removable_relation_adapter():
+    assert _backend.introspection_class_for((4, 2)).__module__ == (
+        "django_redshift_backend.introspection_django42"
+    )
