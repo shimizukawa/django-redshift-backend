@@ -10,29 +10,11 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
-        django-version: ['4.2', '5.0', '5.1']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        django-version: ['4.2', '5.2', '6.0', '6.1']
         exclude:
-          - django-version: '5.0'
-            python-version: '3.9'
-          - django-version: '5.1'
-            python-version: '3.9'
-          - django-version: 'main'
-            python-version: '3.9'
           - django-version: '4.2'
-            python-version: '3.13'
-          - django-version: '5.0'
-            python-version: '3.13'
-
-    services:
-      postgres:
-        image: postgres:9.6-alpine
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: testing
-        ports:
-          - 5439:5432
+            python-version: '3.14'
 
     steps:
     - uses: actions/checkout@v6
@@ -52,4 +34,3 @@ jobs:
       run: uv run --only-dev tox -v
       env:
         DJANGO: ${{ matrix.django-version }}
-        TEST_WITH_POSTGRES: 1

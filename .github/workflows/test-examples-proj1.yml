@@ -11,20 +11,7 @@ jobs:
       max-parallel: 5
       matrix:
         python-version: ['3.10']
-        django-version: ['4.2', '5.0', '5.1']
-        include:
-          - django-version: 'main'
-            python-version: '3.10'
-
-    services:
-      postgres:
-        image: postgres:9.6-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports:
-          - 5432:5432
+        django-version: ['4.2', '5.2', '6.0', '6.1']
 
     steps:
     - uses: actions/checkout@v6
@@ -39,7 +26,6 @@ jobs:
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv pip install --system -r requirements.txt
-        uv pip install --system psycopg2-binary
 
     - name: tests
       working-directory: examples/proj1

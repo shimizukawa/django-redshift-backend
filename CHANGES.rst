@@ -1,12 +1,23 @@
 CHANGES
 =======
 
-5.1.0 (unreleased)
+6.0.0 (unreleased)
 ------------------
 
 General:
 
+* Switch the public backend to AWS's ``redshift-connector`` driver.
+* Drop psycopg2 and the vendored Django 4.0 backend implementation.
+
+Incompatible Changes:
+
+* Python 3.9 and Django versions before 4.2.30 are unsupported.
+* psycopg2-only connection options and direct imports of vendored backend
+  modules are unsupported.
+
 Features:
+
+* Support Django 4.2.30, 5.2, 6.0, and 6.1.
 
 Bug Fixes:
 
