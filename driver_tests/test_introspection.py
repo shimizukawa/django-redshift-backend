@@ -66,9 +66,7 @@ def test_column_description_maps_identity_and_nullability():
         ),
     )
 
-    columns = DatabaseIntrospection(mock.Mock()).get_table_description(
-        cursor, "orders"
-    )
+    columns = DatabaseIntrospection(mock.Mock()).get_table_description(cursor, "orders")
 
     assert columns == [
         FieldInfo(
@@ -86,3 +84,64 @@ def test_column_description_maps_identity_and_nullability():
         )
     ]
     cursor.get_columns.assert_called_once_with(tablename_pattern="orders")
+
+
+def test_constraints_group_primary_foreign_and_unique_metadata():
+    cursor = mock.Mock()
+    cursor.get_primary_keys.return_value = (
+        ("dev", "public", "orders", "id", 1, "orders_pkey"),
+    )
+    cursor.get_imported_keys.return_value = (
+        (
+            "dev",
+            "public",
+            "customer",
+            "id",
+            "dev",
+            "public",
+            "orders",
+            "customer_id",
+            1,
+            3,
+            3,
+            "orders_customer_fk",
+            "customer_pkey",
+            7,
+        ),
+    )
+    cursor.fetchall.return_value = [("orders_code_key", "code", 1)]
+
+    constraints = DatabaseIntrospection(mock.Mock()).get_constraints(cursor, "orders")
+
+    assert constraints["orders_pkey"]["primary_key"] is True
+    assert constraints["orders_pkey"]["columns"] == ["id"]
+    assert constraints["orders_customer_fk"]["foreign_key"] == ("customer", "id")
+    assert constraints["orders_code_key"]["unique"] is True
+    cursor.get_primary_keys.assert_called_once_with(table="orders")
+    cursor.get_imported_keys.assert_called_once_with(table="orders")
+
+
+def test_relations_include_no_on_delete_value_on_modern_django():
+    cursor = mock.Mock()
+    cursor.get_imported_keys.return_value = (
+        (
+            "dev",
+            "public",
+            "customer",
+            "id",
+            "dev",
+            "public",
+            "orders",
+            "customer_id",
+            1,
+            3,
+            3,
+            "orders_customer_fk",
+            "customer_pkey",
+            7,
+        ),
+    )
+
+    relations = DatabaseIntrospection(mock.Mock()).get_relations(cursor, "orders")
+
+    assert relations == {"customer_id": ("id", "customer", None)}
