@@ -82,12 +82,7 @@ def test_schema_guide_is_published_with_public_engine_activation():
     assert "does not create or apply a Django migration" in guide
 
 
-def test_example_ci_does_not_require_a_live_database():
-    workflow = (
-        REPOSITORY_ROOT / ".github" / "workflows" / "test-examples-proj1.yml"
-    ).read_text(encoding="utf-8")
+def test_live_database_example_workflow_is_deferred():
+    workflow = REPOSITORY_ROOT / ".github" / "workflows" / "test-examples-proj1.yml"
 
-    assert "makemigrations" not in workflow
-    assert "sqlmigrate testapp 0001" in workflow
-    assert "services:" not in workflow
-    assert "        ENV_FILE: .env.psql" in workflow
+    assert not workflow.exists()
