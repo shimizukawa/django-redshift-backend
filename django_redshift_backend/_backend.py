@@ -1,7 +1,5 @@
 import django
-
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.backends.utils import CursorDebugWrapper, CursorWrapper
 from django.db.utils import NotSupportedError
 
@@ -9,6 +7,7 @@ from . import driver
 from .client import DatabaseClient
 from .creation import DatabaseCreation
 from .features import DatabaseFeatures
+from .introspection import DatabaseIntrospection
 from .operations import DatabaseOperations
 from .schema import DatabaseSchemaEditor
 
@@ -42,7 +41,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     client_class = DatabaseClient
     creation_class = DatabaseCreation
     features_class = DatabaseFeatures
-    introspection_class = BaseDatabaseIntrospection
+    introspection_class = DatabaseIntrospection
     ops_class = DatabaseOperations
     SchemaEditorClass = schema_editor_class_for(django.VERSION)
 
