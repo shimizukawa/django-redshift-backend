@@ -40,9 +40,11 @@ it never creates AWS resources from ordinary CI or from an application test.
 
 ## Deployment Architecture
 
-The CDK application is a Python project managed with `uv`. It defines one
-CloudFormation stack, parameterized by AWS account, Region, an operator
-supplied `allowed_cidr`, and non-secret naming values. It creates:
+The CDK application is a Python project managed with `uv`. Its `cdk.json`
+defines the Python app command, so the operator runs plain `cdk deploy` from
+`live_validation/`. It defines one CloudFormation stack using CDK's standard
+AWS account and Region environment plus fixed process environment variables
+for the temporary password, owner, and expiration date. It creates:
 
 1. A dedicated VPC with an internet gateway and three public subnets in
    distinct Availability Zones. It has no NAT gateway and no private workload
@@ -55,46 +57,48 @@ supplied `allowed_cidr`, and non-secret naming values. It creates:
    Region, has a conservative maximum capacity, and has a daily RPU-hour usage
    limit whose action turns off user queries.
 
-The deployment wrapper determines the caller's current public IPv4 address at
-execution time and passes it to CDK as `<address>/32`. A changed ISP address is
-handled by rerunning deploy, which updates only the security-group rule. The
-CDK source must reject a non-single-host CIDR and must never default to
+The Python CDK application determines the caller's current public IPv4 address
+at synthesis time and converts it to `<address>/32`. A changed ISP address is
+handled by rerunning `cdk deploy`, which updates only the security-group rule.
+The CDK source must reject a non-single-host CIDR and must never default to
 `0.0.0.0/0`.
 
-The namespace sets `ManageAdminPassword=true`, so Redshift generates its admin
-password and manages it in AWS Secrets Manager. The stack outputs only endpoint
-address, port, database name, admin username, workgroup name, namespace name,
-and the accepted CIDR. It does not output the secret ARN or password.
+The Python CDK application reads the required admin password from the fixed
+`REDSHIFT_LIVE_PASSWORD` process environment variable and passes it to the
+namespace as `AdminUserPassword`; it does not use CDK context, a CloudFormation
+parameter, or Secrets Manager. The same shell value is passed to the Django
+validation process. The stack outputs only endpoint address, port, database
+name, admin username, workgroup name, namespace name, and the accepted CIDR. It
+never outputs the password.
 
-After deployment, the human operator explicitly retrieves the Redshift-managed
-password from Secrets Manager and passes it to the Django validation process
-through the local process environment. Repository automation does not retrieve
-the password. The password is never written to a generated settings file,
-shell script, CDK context, CloudFormation parameter or output, or repository
-artifact. Destroy verification confirms that the namespace and its
-Redshift-managed admin secret are gone.
+Because a synth-time environment value appears in the local synthesized
+CloudFormation assembly, `live_validation/cdk.out/` is ignored and treated as
+sensitive temporary data. The operator removes it and clears the environment
+variable after every session. The password must never be committed, included
+in a PR artifact, or copied into a command-line argument.
 
 CDK requires one per-account/Region bootstrap stack (`CDKToolkit`). That is an
 intentional one-time prerequisite and is outside the disposable validation
 stack. The documentation identifies its retained S3/ECR/IAM resources. VPC
 Block Public Access must permit this dedicated VPC to host a public workgroup;
-the deploy preflight fails with a remediation message when account or Region
-policy prevents public access rather than weakening that policy automatically.
+the documentation explains that `cdk deploy` fails when account or Region
+policy prevents public access and how to inspect that policy. The application
+never weakens account policy automatically.
 
 ## Lifecycle
 
 The documented operator flow is:
 
 1. Configure AWS credentials and bootstrap the target account/Region once.
-2. Run the deploy wrapper, which resolves the current IP, deploys the stack,
-   and waits for the workgroup endpoint.
-3. Export non-secret connection settings from stack outputs, have the human
-   operator retrieve the Redshift-managed password, and provide the
-   username/password locally to the validation process.
+2. Set the documented fixed environment variables and run `cdk deploy` from
+   `live_validation/`; `cdk.json` selects the Python application, which resolves
+   the current IP and deploys through normal CDK behavior.
+3. Export non-secret connection settings from stack outputs and pass the same
+   local password environment value to the Django validation process.
 4. Run the live-validation command against `examples/proj1`.
-5. On success or failure, run the destroy wrapper. It destroys the
-   CloudFormation stack and verifies that the workgroup and namespace are no
-   longer present. No manual snapshot is created.
+5. On success or failure, run `cdk destroy`. Then run the documented AWS CLI
+   read-only checks to verify that the workgroup and namespace are no longer
+   present. No manual snapshot is created.
 
 The namespace is deleted as well as the workgroup. Deleting only the
 workgroup leaves storage-bearing namespace resources behind.
@@ -141,12 +145,15 @@ cleanup: the operator must see a clear destroy instruction and status.
   owner and expiration tags supplied by the operator.
 - Each public subnet has enough free addresses for the Serverless workgroup;
   synthesis tests pin the subnet topology and address ranges.
-- The README documents that `cdk destroy` must run after every session and how
-  to check for retained CloudFormation, Redshift, and snapshot resources.
+- The README documents that `cdk destroy` must run after every session, how to
+  remove the sensitive local `cdk.out/` assembly and password environment
+  variable, and how to check for retained CloudFormation, Redshift, and
+  snapshot resources.
 
 ## Tests and Evidence
 
-AWS-free tests validate CDK synthesis rather than contacting AWS. They assert
+AWS-free tests validate CDK synthesis with injected environment and IP lookup
+values rather than contacting AWS. They assert
 the number and topology of VPC subnets, no NAT gateway, the constrained
 security-group rule, Serverless resource properties, outputs excluding secrets,
 and deletion dependency order.
