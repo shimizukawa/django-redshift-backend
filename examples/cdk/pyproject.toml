@@ -1,0 +1,21 @@
+[project]
+name = "django-redshift-backend-live-validation"
+version = "0.0.0"
+requires-python = ">=3.12,<4"
+dependencies = [
+    "aws-cdk-lib>=2.220,<3",
+    "constructs>=10,<11",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+    "pytest-cov>=5,<7",
+    "ruff>=0.6.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
