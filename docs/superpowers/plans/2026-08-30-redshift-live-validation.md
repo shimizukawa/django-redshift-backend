@@ -4,7 +4,7 @@
 
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
-**Architecture:** An isolated `uv` project under `live_validation/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the same local password is supplied to a dedicated Django settings module and validation runner.
+**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the same local password is supplied to a dedicated Django settings module and validation runner.
 
 **Tech Stack:** Python 3.12, `uv`, AWS CDK v2 for Python (`aws-cdk-lib`), pytest, AWS CLI v2, Django management commands, and Amazon Redshift Serverless. No TypeScript or JavaScript CDK application is used.
 
@@ -25,40 +25,40 @@
 - Create no final or manual snapshot. Destroy both workgroup and namespace, then verify that both are gone.
 - Tag resources with `Purpose=django-redshift-backend-live-validation` and operator-supplied `Owner` and `ExpiresAt` values.
 - Keep all committed tests AWS-free. Commands that contact AWS are explicit operator actions only.
-- Keep `live_validation/cdk.out/` ignored; it contains the synthesized password value and must be removed after destroy.
+- Keep `examples/cdk/cdk.out/` ignored; it contains the synthesized password value and must be removed after destroy.
 
 ---
 
 ### Task 1: Isolated CDK Project and Contract Helpers
 
 **Files:**
-- Create: `live_validation/pyproject.toml`
-- Create: `live_validation/uv.lock`
-- Create: `live_validation/cdk.json`
-- Create: `live_validation/app.py`
-- Create: `live_validation/live_validation/__init__.py`
-- Create: `live_validation/live_validation/config.py`
-- Create: `live_validation/tests/test_config.py`
+- Create: `examples/cdk/pyproject.toml`
+- Create: `examples/cdk/uv.lock`
+- Create: `examples/cdk/cdk.json`
+- Create: `examples/cdk/app.py`
+- Create: `examples/cdk/cdk_app/__init__.py`
+- Create: `examples/cdk/cdk_app/config.py`
+- Create: `examples/cdk/tests/test_config.py`
 - Modify: `.gitignore`
 
 **Interfaces:**
 - Consumes: Python 3.12, fixed environment values `DB_PASSWORD`, `REDSHIFT_LIVE_OWNER`, and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
-- Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and the `uv run --project live_validation ...` command prefix.
+- Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and the `uv run --project examples/cdk ...` command prefix.
 
 - [ ] **Step 1: Create the isolated project metadata**
 
-Create `live_validation/pyproject.toml` with Python `>=3.12,<4`, dependencies `aws-cdk-lib>=2.220,<3` and `constructs>=10,<11`, and a `dev` dependency group containing `pytest>=8,<9`, `pytest-cov>=5,<7`, and `ruff>=0.6.2`. Configure pytest with `testpaths = ["tests"]` and Ruff with `target-version = "py312"`.
+Create `examples/cdk/pyproject.toml` with Python `>=3.12,<4`, dependencies `aws-cdk-lib>=2.220,<3` and `constructs>=10,<11`, and a `dev` dependency group containing `pytest>=8,<9`, `pytest-cov>=5,<7`, and `ruff>=0.6.2`. Configure pytest with `testpaths = ["tests"]` and Ruff with `target-version = "py312"`.
 
 Add these exceptions to `.gitignore` so the isolated lock and the example migration added later are committed:
 
 ```gitignore
-!live_validation/uv.lock
+!examples/cdk/uv.lock
 !examples/proj1/testapp/migrations/
 !examples/proj1/testapp/migrations/*.py
 ```
 
-Also add `live_validation/cdk.out/` explicitly to `.gitignore` and create
-`live_validation/cdk.json`:
+Also add `examples/cdk/cdk.out/` explicitly to `.gitignore` and create
+`examples/cdk/cdk.json`:
 
 ```json
 {
@@ -71,8 +71,8 @@ Also add `live_validation/cdk.out/` explicitly to `.gitignore` and create
 Run:
 
 ```powershell
-uv lock --project live_validation
-uv run --project live_validation python -c "import aws_cdk; print(aws_cdk.__version__)"
+uv lock --project examples/cdk
+uv run --project examples/cdk python -c "import aws_cdk; print(aws_cdk.__version__)"
 ```
 
 Expected: dependency resolution succeeds and the installed CDK version prints.
@@ -84,7 +84,7 @@ Create tests covering these exact cases:
 ```python
 import pytest
 
-from live_validation.config import ValidationConfig, validate_allowed_cidr
+from cdk_app.config import ValidationConfig, validate_allowed_cidr
 
 
 @pytest.mark.parametrize("value", ["0.0.0.0/0", "203.0.113.0/24", "::1/128", "invalid"])
@@ -111,9 +111,9 @@ def test_environment_supplies_password_and_ownership_values():
 
 - [ ] **Step 4: Run tests and confirm the module is absent**
 
-Run: `uv run --project live_validation pytest live_validation/tests/test_config.py -v`
+Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_config.py -v`
 
-Expected: collection fails because `live_validation.config` does not exist.
+Expected: collection fails because `cdk_app.config` does not exist.
 
 - [ ] **Step 5: Implement the immutable configuration object**
 
@@ -133,8 +133,8 @@ variable. Do not print the password.
 Run:
 
 ```powershell
-uv run --project live_validation pytest live_validation/tests/test_config.py -q
-uv run --project live_validation ruff check live_validation
+uv run --project examples/cdk pytest examples/cdk/tests/test_config.py -q
+uv run --project examples/cdk ruff check examples/cdk
 ```
 
 Expected: tests and Ruff pass.
@@ -142,16 +142,16 @@ Expected: tests and Ruff pass.
 Commit:
 
 ```powershell
-git add .gitignore live_validation
+git add .gitignore examples/cdk
 git commit -m "build: add isolated live validation project"
 ```
 
 ### Task 2: Network and Public-Access Safety Boundary
 
 **Files:**
-- Create: `live_validation/live_validation/stack.py`
-- Create: `live_validation/tests/test_network_stack.py`
-- Modify: `live_validation/app.py`
+- Create: `examples/cdk/cdk_app/stack.py`
+- Create: `examples/cdk/tests/test_network_stack.py`
+- Modify: `examples/cdk/app.py`
 
 **Interfaces:**
 - Consumes: `ValidationConfig` from Task 1.
@@ -182,7 +182,7 @@ Also inspect synthesized route tables and assert every subnet has a default rout
 
 - [ ] **Step 2: Run the focused test and verify failure**
 
-Run: `uv run --project live_validation pytest live_validation/tests/test_network_stack.py -v`
+Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_network_stack.py -v`
 
 Expected: FAIL because `LiveValidationStack` is not defined.
 
@@ -195,12 +195,12 @@ Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configu
 Run:
 
 ```powershell
-uv run --project live_validation pytest live_validation/tests/test_network_stack.py -q
-uv run --project live_validation ruff check live_validation
+uv run --project examples/cdk pytest examples/cdk/tests/test_network_stack.py -q
+uv run --project examples/cdk ruff check examples/cdk
 $env:DB_PASSWORD = 'synthesis-only-value-A1'
 $env:REDSHIFT_LIVE_OWNER = 'test'
 $env:REDSHIFT_LIVE_EXPIRES_AT = '2026-08-31'
-Push-Location live_validation
+Push-Location examples/cdk
 cdk synth
 Pop-Location
 ```
@@ -212,8 +212,8 @@ Commit: `git commit -am "feat: define isolated validation network"` after stagin
 ### Task 3: Redshift Serverless Resources, Secret, and Cost Controls
 
 **Files:**
-- Modify: `live_validation/live_validation/stack.py`
-- Create: `live_validation/tests/test_redshift_stack.py`
+- Modify: `examples/cdk/cdk_app/stack.py`
+- Create: `examples/cdk/tests/test_redshift_stack.py`
 
 **Interfaces:**
 - Consumes: VPC subnet IDs, security-group ID, and `ValidationConfig`.
@@ -227,7 +227,7 @@ Assert outputs contain exactly endpoint address, port, database name, admin user
 
 - [ ] **Step 2: Run the focused tests and verify failure**
 
-Run: `uv run --project live_validation pytest live_validation/tests/test_redshift_stack.py -v`
+Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_redshift_stack.py -v`
 
 Expected: FAIL because no Serverless resources exist.
 
@@ -246,8 +246,8 @@ Use `CfnUsageLimit` with the workgroup ARN, `usage_type="serverless-compute"`, `
 Run:
 
 ```powershell
-uv run --project live_validation pytest live_validation/tests -q
-uv run --project live_validation ruff check live_validation
+uv run --project examples/cdk pytest examples/cdk/tests -q
+uv run --project examples/cdk ruff check examples/cdk
 git diff --check
 ```
 
@@ -256,12 +256,12 @@ Commit: `git commit -am "feat: define disposable Redshift validation stack"` aft
 ### Task 4: Plain CDK Deploy and Destroy Contract
 
 **Files:**
-- Modify: `live_validation/app.py`
-- Create: `live_validation/tests/test_app.py`
+- Modify: `examples/cdk/app.py`
+- Create: `examples/cdk/tests/test_app.py`
 
 **Interfaces:**
 - Consumes: fixed environment variables, CDK's standard account/Region, and an injectable public-IP lookup response.
-- Produces: a Python CDK application runnable as plain `cdk deploy` and `cdk destroy` from `live_validation/`.
+- Produces: a Python CDK application runnable as plain `cdk deploy` and `cdk destroy` from `examples/cdk/`.
 
 - [ ] **Step 1: Write failing pure-unit tests**
 
@@ -269,7 +269,7 @@ Cover newline-trimmed IPv4 lookup, rejection of IPv6/private/malformed responses
 
 - [ ] **Step 2: Run tests and verify failure**
 
-Run: `uv run --project live_validation pytest live_validation/tests/test_app.py -v`
+Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_app.py -v`
 
 Expected: FAIL because the application helpers are absent.
 
@@ -288,7 +288,7 @@ silently increasing capacity.
 
 - [ ] **Step 4: Verify the plain CDK commands**
 
-From `live_validation/`, run `cdk synth` with mocked/injected IP lookup for the
+From `examples/cdk/`, run `cdk synth` with mocked/injected IP lookup for the
 AWS-free check. Confirm `cdk.json` supplies the app command and no `--app`,
 context, or parameter argument is needed. Document `cdk deploy` and
 `cdk destroy` as the only mutating operator commands; post-destroy AWS CLI
@@ -299,8 +299,8 @@ commands are read-only verification.
 Run:
 
 ```powershell
-uv run --project live_validation pytest live_validation/tests/test_app.py -q
-uv run --project live_validation ruff check live_validation
+uv run --project examples/cdk pytest examples/cdk/tests/test_app.py -q
+uv run --project examples/cdk ruff check examples/cdk
 ```
 
 Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after staging the new files.
@@ -375,7 +375,7 @@ git commit -m "test: add real Redshift validation runner"
 ### Task 6: Operator Guide and Release Evidence Template
 
 **Files:**
-- Create: `live_validation/README.md`
+- Create: `examples/cdk/README.md`
 - Create: `.github/PULL_REQUEST_TEMPLATE/live-redshift-validation.md`
 - Modify: `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
 
@@ -394,7 +394,7 @@ cleanup verification. The password handoff must use this PowerShell shape:
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
 $env:REDSHIFT_LIVE_OWNER = 'operator-name'
 $env:REDSHIFT_LIVE_EXPIRES_AT = 'YYYY-MM-DD'
-Push-Location live_validation
+Push-Location examples/cdk
 cdk deploy
 Pop-Location
 ```
@@ -422,7 +422,7 @@ Update the redesign design's real-Redshift risk/status text to point to this rel
 Run:
 
 ```powershell
-rg -n -i "password|secret|token|access.key" live_validation/README.md .github/PULL_REQUEST_TEMPLATE/live-redshift-validation.md
+rg -n -i "password|secret|token|access.key" examples/cdk/README.md .github/PULL_REQUEST_TEMPLATE/live-redshift-validation.md
 git diff --check
 ```
 
@@ -446,9 +446,9 @@ Commit: `git commit -am "docs: add live Redshift release runbook"` after staging
 Use `actions/checkout@v6` and `astral-sh/setup-uv@v7` with Python 3.12. Run exactly:
 
 ```yaml
-- run: uv sync --project live_validation --locked --all-groups
-- run: uv run --project live_validation pytest live_validation/tests -q
-- run: uv run --project live_validation ruff check live_validation
+- run: uv sync --project examples/cdk --locked --all-groups
+- run: uv run --project examples/cdk pytest examples/cdk/tests -q
+- run: uv run --project examples/cdk ruff check examples/cdk
 - run: uv run --with pytest pytest tests/test_live_validation_contract.py -q
 ```
 
@@ -459,9 +459,9 @@ Do not add AWS credentials, OIDC permissions, environment secrets, deploy, or de
 Run:
 
 ```powershell
-uv sync --project live_validation --locked --all-groups
-uv run --project live_validation pytest live_validation/tests -q
-uv run --project live_validation ruff check live_validation
+uv sync --project examples/cdk --locked --all-groups
+uv run --project examples/cdk pytest examples/cdk/tests -q
+uv run --project examples/cdk ruff check examples/cdk
 uv run --with pytest pytest tests/test_live_validation_contract.py -q
 uv run --only-dev tox -v
 uv build
