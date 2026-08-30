@@ -43,9 +43,9 @@
 
 **Interfaces:**
 - Consumes: Python 3.12, fixed environment values `DB_PASSWORD` and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
-- Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and the `uv run --project examples/cdk ...` command prefix.
+- Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and commands executed with `examples/cdk/` as their working directory.
 
-- [ ] **Step 1: Create the isolated project metadata**
+- [x] **Step 1: Create the isolated project metadata**
 
 Create `examples/cdk/pyproject.toml` with Python `>=3.12,<4`, dependencies `aws-cdk-lib>=2.220,<3` and `constructs>=10,<11`, and a `dev` dependency group containing `pytest>=8,<9`, `pytest-cov>=5,<7`, and `ruff>=0.6.2`. Configure pytest with `testpaths = ["tests"]` and Ruff with `target-version = "py312"`.
 
@@ -64,7 +64,7 @@ Also add `examples/cdk/cdk.out/` explicitly to `.gitignore` and create
 }
 ```
 
-- [ ] **Step 2: Lock the isolated project**
+- [x] **Step 2: Lock the isolated project**
 
 Run:
 
@@ -75,7 +75,7 @@ uv run --project examples/cdk python -c "import aws_cdk; print(aws_cdk.__version
 
 Expected: dependency resolution succeeds and the installed CDK version prints.
 
-- [ ] **Step 3: Write failing configuration tests**
+- [x] **Step 3: Write failing configuration tests**
 
 Create tests covering these exact cases:
 
@@ -106,17 +106,17 @@ def test_environment_supplies_password_and_expiration():
     assert config.daily_rpu_hours == 8
 ```
 
-- [ ] **Step 4: Run tests and confirm the module is absent**
+- [x] **Step 4: Run tests and confirm the module is absent**
 
-Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_config.py -v`
+Run: `uv run --directory examples/cdk python -m pytest tests/test_config.py -v`
 
 Expected: collection fails because `cdk_app.config` does not exist.
 
-- [ ] **Step 5: Implement the immutable configuration object**
+- [x] **Step 5: Implement the immutable configuration object**
 
 Implement `ValidationConfig` as a frozen dataclass. Require non-empty `expires_at` and `region`; use prefix `django-redshift-live`; and pin `base_capacity=4`, `max_capacity=8`, and `daily_rpu_hours=8`. Use `ipaddress.ip_network(value, strict=True)` and reject non-IPv4, non-global, or prefix lengths other than 32. Tests may use `8.8.8.8/32` as a syntactically global address for synthesis only; no test deploys or contacts that address.
 
-- [ ] **Step 6: Add the CDK entry point**
+- [x] **Step 6: Add the CDK entry point**
 
 `app.py` must read the two fixed environment variables, resolve the public
 IPv4 through an injectable standard-library function, construct
@@ -125,13 +125,13 @@ Use `CDK_DEFAULT_ACCOUNT` and `CDK_DEFAULT_REGION` through `cdk.Environment`.
 Missing required values fail before synthesis and name only the missing
 variable. Do not print the password.
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 Run:
 
 ```powershell
-uv run --project examples/cdk pytest examples/cdk/tests/test_config.py -q
-uv run --project examples/cdk ruff check examples/cdk
+uv run --directory examples/cdk python -m pytest tests/test_config.py -q
+uv run --directory examples/cdk ruff check .
 ```
 
 Expected: tests and Ruff pass.
@@ -154,7 +154,7 @@ git commit -m "build: add isolated live validation project"
 - Consumes: `ValidationConfig` from Task 1.
 - Produces: `LiveValidationStack(scope, construct_id, *, config, env)` with one VPC, three public subnets, one internet gateway, zero NAT gateways, and one security group ingress rule.
 
-- [ ] **Step 1: Write failing synthesis tests**
+- [x] **Step 1: Write failing synthesis tests**
 
 Use `aws_cdk.assertions.Template.from_stack(stack)` and assert:
 
@@ -177,23 +177,23 @@ template.has_resource_properties(
 
 Also inspect synthesized route tables and assert every subnet has a default route to the stack's internet gateway. Assert that no ingress rule contains `0.0.0.0/0`.
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
-Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_network_stack.py -v`
+Run: `uv run --directory examples/cdk python -m pytest tests/test_network_stack.py -v`
 
 Expected: FAIL because `LiveValidationStack` is not defined.
 
-- [ ] **Step 3: Implement the minimum network stack**
+- [x] **Step 3: Implement the minimum network stack**
 
 Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configuration using a `/24` mask. Reject synthesis unless CDK resolves exactly three selected availability zones. Create a dedicated security group and add only `Peer.ipv4(config.allowed_cidr)` on `Port.tcp(5439)`. Apply `Purpose` and `ExpiresAt` tags at stack scope.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run:
 
 ```powershell
-uv run --project examples/cdk pytest examples/cdk/tests/test_network_stack.py -q
-uv run --project examples/cdk ruff check examples/cdk
+uv run --directory examples/cdk python -m pytest tests/test_network_stack.py -q
+uv run --directory examples/cdk ruff check .
 $env:DB_PASSWORD = 'synthesis-only-value-A1'
 $env:REDSHIFT_LIVE_EXPIRES_AT = '2026-08-31'
 Push-Location examples/cdk
@@ -213,37 +213,44 @@ Commit: `git commit -am "feat: define isolated validation network"` after stagin
 
 **Interfaces:**
 - Consumes: VPC subnet IDs, security-group ID, and `ValidationConfig`.
-- Produces: `AWS::RedshiftServerless::Namespace`, `Workgroup`, and `UsageLimit` resources plus non-secret CloudFormation outputs.
+- Produces: `AWS::RedshiftServerless::Namespace` and `Workgroup` resources, an API-backed usage-limit custom resource, and non-secret CloudFormation outputs.
 
-- [ ] **Step 1: Write failing resource tests**
+- [x] **Step 1: Write failing resource tests**
 
 Assert the namespace has the injected `AdminUserPassword`, a non-default admin username, a database name, no `ManageAdminPassword`, no final snapshot properties, and deletion policy `Delete`. Assert the workgroup references all three subnets and the security group, is publicly accessible, uses port 5439, requires SSL through `ConfigParameters`, and has base/max capacities 4/8. Assert the usage limit has `UsageType=serverless-compute`, `Period=daily`, `Amount=8`, and `BreachAction=deactivate`.
 
 Assert outputs contain exactly endpoint address, port, database name, admin username, workgroup name, namespace name, and allowed CIDR. Fail if any output key contains `password`, `secret`, or `token`, case-insensitively, and assert the password value does not appear in any output value.
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
-Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_redshift_stack.py -v`
+Run: `uv run --directory examples/cdk python -m pytest tests/test_redshift_stack.py -v`
 
 Expected: FAIL because no Serverless resources exist.
 
-- [ ] **Step 3: Implement the namespace and workgroup**
+- [x] **Step 3: Implement the namespace and workgroup**
 
 Use L1 constructs `aws_redshiftserverless.CfnNamespace` and `CfnWorkgroup` so all security-sensitive properties are explicit. Set `admin_user_password=config.password`, `admin_username="validation_admin"`, `db_name="validation"`, and `deletion_policy=RemovalPolicy.DESTROY`. Do not set `manage_admin_password`. Add an explicit dependency from the workgroup to the namespace and pass the three public subnet IDs and dedicated security-group ID.
 
 Set workgroup config parameter `require_ssl=true`. Do not output the password.
 
-- [ ] **Step 4: Implement the usage limit and deletion order**
+- [x] **Step 4: Implement the usage limit and deletion order**
 
-Use `CfnUsageLimit` with the workgroup ARN, `usage_type="serverless-compute"`, `period="daily"`, `amount=config.daily_rpu_hours`, and `breach_action="deactivate"`. Make the usage limit depend on the workgroup. Ensure CloudFormation deletes the usage limit before the workgroup and the workgroup before the namespace through resource references/dependencies.
+CloudFormation and CDK have no Redshift Serverless usage-limit resource. Use
+`AwsCustomResource` to call `CreateUsageLimit` with the workgroup ARN,
+`usageType="serverless-compute"`, `period="daily"`,
+`amount=config.daily_rpu_hours`, and `breachAction="deactivate"`; retain the
+returned usage-limit ID as the physical resource ID and call `DeleteUsageLimit`
+on deletion. Make the custom resource depend on the workgroup. Ensure deletion
+orders the usage limit before the workgroup and the workgroup before the
+namespace.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
 ```powershell
-uv run --project examples/cdk pytest examples/cdk/tests -q
-uv run --project examples/cdk ruff check examples/cdk
+uv run --directory examples/cdk python -m pytest tests -q
+uv run --directory examples/cdk ruff check .
 git diff --check
 ```
 
@@ -259,17 +266,17 @@ Commit: `git commit -am "feat: define disposable Redshift validation stack"` aft
 - Consumes: fixed environment variables, CDK's standard account/Region, and an injectable public-IP lookup response.
 - Produces: a Python CDK application runnable as plain `cdk deploy` and `cdk destroy` from `examples/cdk/`.
 
-- [ ] **Step 1: Write failing pure-unit tests**
+- [x] **Step 1: Write failing pure-unit tests**
 
 Cover newline-trimmed IPv4 lookup, rejection of IPv6/private/malformed responses, missing fixed environment variables, password exclusion from exception messages, CDK standard account/Region selection, and Region membership in the documented 4-RPU allowlist. Mock all network access; tests must never contact an IP service or AWS.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
-Run: `uv run --project examples/cdk pytest examples/cdk/tests/test_app.py -v`
+Run: `uv run --directory examples/cdk python -m pytest tests/test_app.py -v`
 
 Expected: FAIL because the application helpers are absent.
 
-- [ ] **Step 3: Implement environment and synthesis preflight**
+- [x] **Step 3: Implement environment and synthesis preflight**
 
 Use `urllib.request` only for public-IP lookup. Require
 `DB_PASSWORD`, `REDSHIFT_LIVE_EXPIRES_AT`, `CDK_DEFAULT_ACCOUNT`, and
@@ -289,13 +296,13 @@ context, or parameter argument is needed. Document `cdk deploy` and
 `cdk destroy` as the only mutating operator commands; post-destroy AWS CLI
 commands are read-only verification.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
 ```powershell
-uv run --project examples/cdk pytest examples/cdk/tests/test_app.py -q
-uv run --project examples/cdk ruff check examples/cdk
+uv run --directory examples/cdk python -m pytest tests/test_app.py -q
+uv run --directory examples/cdk ruff check .
 ```
 
 Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after staging the new files.
@@ -311,7 +318,7 @@ Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after stagin
 - Consumes: commands and outputs from Tasks 1-4 plus the existing `examples/proj1/config/settings.py` `DATABASE_URL` interface.
 - Produces: an end-to-end human runbook and sanitized evidence checklist for release 6.0.0.
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Document exact commands for prerequisites, Python CDK bootstrap, setting the
 two fixed environment variables, plain `cdk deploy`, exporting the non-secret
@@ -342,15 +349,15 @@ deployment.
 
 Include failure paths for changed public IP, VPC Block Public Access, interrupted deploy, failed validation, failed destroy, retained workgroup/namespace, retained snapshots, and retained `CDKToolkit` resources. Make destroy mandatory after both success and failure.
 
-- [ ] **Step 2: Add the manual release checklist**
+- [x] **Step 2: Add the manual release checklist**
 
 The template must record commit SHA, UTC timestamp, operator, AWS account suffix only, Region, Django version, driver version, sanitized endpoint, the exact validation commands or probes selected for the session, their outcomes, cleanup performed, destroy result, and confirmation that namespace, workgroup, and snapshots are absent. It must warn against pasting passwords, access keys, tokens, or full AWS account IDs.
 
-- [ ] **Step 3: Close the parent-design deferral**
+- [x] **Step 3: Close the parent-design deferral**
 
 Update the redesign design's real-Redshift risk/status text to point to this release-gate implementation. Do not mark real validation successful until a human run has actually passed.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run:
 
@@ -374,26 +381,26 @@ Commit: `git commit -am "docs: add live Redshift release runbook"` after staging
 - Consumes: the complete isolated CDK project and operator documentation.
 - Produces: blocking AWS-free synthesis/contract checks and a reviewable stacked PR ready for the later human AWS run.
 
-- [ ] **Step 1: Add the AWS-free workflow**
+- [x] **Step 1: Add the AWS-free workflow**
 
 Use `actions/checkout@v6` and `astral-sh/setup-uv@v7` with Python 3.12. Run exactly:
 
 ```yaml
-- run: uv sync --project examples/cdk --locked --all-groups
-- run: uv run --project examples/cdk pytest examples/cdk/tests -q
-- run: uv run --project examples/cdk ruff check examples/cdk
+- run: uv sync --directory examples/cdk --locked --all-groups
+- run: uv run --directory examples/cdk python -m pytest tests -q
+- run: uv run --directory examples/cdk ruff check .
 ```
 
 Do not add AWS credentials, OIDC permissions, environment secrets, deploy, or destroy steps.
 
-- [ ] **Step 2: Run final local verification**
+- [x] **Step 2: Run final local verification**
 
 Run:
 
 ```powershell
-uv sync --project examples/cdk --locked --all-groups
-uv run --project examples/cdk pytest examples/cdk/tests -q
-uv run --project examples/cdk ruff check examples/cdk
+uv sync --directory examples/cdk --locked --all-groups
+uv run --directory examples/cdk python -m pytest tests -q
+uv run --directory examples/cdk ruff check .
 uv run --only-dev tox -v
 uv build
 uv run --only-dev twine check dist/*
@@ -403,7 +410,7 @@ git status --short
 
 Expected: all tests, lint, package checks, and diff checks pass; status contains only the plan checkbox/result updates before the final commit.
 
-- [ ] **Step 3: Record measured results in this plan and commit**
+- [x] **Step 3: Record measured results in this plan and commit**
 
 Mark completed checkboxes and append exact command versions and test counts. Do not claim a real Redshift pass; label it pending human execution.
 
@@ -425,3 +432,20 @@ Add #9 to the stack, replace stale current-status text, and append a progress co
 - [ ] **Step 6: Stop before AWS deployment**
 
 Report the exact reviewed operator command sequence. A human must separately choose the AWS account/Region, confirm current pricing and permissions, set the fixed environment values, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
+
+## Implementation Results
+
+- Python CDK project and lock completed with uv 0.11.29 and Python 3.12.
+- AWS-free CDK contract suite: 21 passed in 44.67 seconds in the final run.
+- CDK project Ruff check: passed.
+- Full backend tox matrix: 14 Python/Django environments passed; lint and
+  package checks passed in 425.08 seconds. Django 4.2 environments reported
+  349 passed/13 skipped each; Django 5.2, 6.0, and 6.1 environments reported
+  362 passed/2 skipped each.
+- Wheel and sdist passed Twine validation as part of the tox `check`
+  environment.
+- Local plain `cdk synth` was not run because the CDK CLI is not installed on
+  this workstation. Template synthesis is exercised by the 21 AWS-free tests;
+  installing CDK CLI v2 remains an operator prerequisite.
+- Real Redshift deployment, validation, and destruction: pending explicit
+  human execution before release.
