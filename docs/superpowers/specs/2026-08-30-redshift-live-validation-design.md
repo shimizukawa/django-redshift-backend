@@ -55,7 +55,9 @@ for the temporary password and expiration date. It creates:
    the three subnets, and the dedicated security group. The workgroup is
    publicly accessible, uses the lowest capacity supported in the selected
    Region, has a conservative maximum capacity, and has a daily RPU-hour usage
-   limit whose action turns off user queries.
+   limit whose action turns off user queries. Because CloudFormation has no
+   Redshift Serverless usage-limit resource, an `AwsCustomResource` creates and
+   deletes that limit through the Redshift Serverless API.
 
 The Python CDK application determines the caller's current public IPv4 address
 at synthesis time and converts it to `<address>/32`. A changed ISP address is
@@ -134,7 +136,8 @@ cleanup must remain visible, and the operator must still run and verify
 
 - No inbound `0.0.0.0/0` rule is permitted.
 - The only public port is 5439, restricted to the deployer's dynamic `/32`.
-- TLS is required by the live-validation settings.
+- TLS is required through the workgroup configuration and the backend's normal
+  connection path; no live-only settings module is introduced.
 - No NAT gateway, operator-managed Elastic IP, VPC endpoint, manual snapshot,
   or persistent database resource is created by this stack. Redshift's
   service-managed public address for the explicitly public workgroup is
