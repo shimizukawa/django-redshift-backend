@@ -4,7 +4,7 @@
 
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
-**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; a dedicated Django settings module exposes the connection to commands and probes selected during each live session.
+**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the runbook maps its outputs and `DB_PASSWORD` into the `DATABASE_URL` already consumed by `examples/proj1/config/settings.py`.
 
 **Tech Stack:** Python 3.12, `uv`, AWS CDK v2 for Python (`aws-cdk-lib`), pytest, AWS CLI v2, Django management commands, and Amazon Redshift Serverless. No TypeScript or JavaScript CDK application is used.
 
@@ -49,12 +49,10 @@
 
 Create `examples/cdk/pyproject.toml` with Python `>=3.12,<4`, dependencies `aws-cdk-lib>=2.220,<3` and `constructs>=10,<11`, and a `dev` dependency group containing `pytest>=8,<9`, `pytest-cov>=5,<7`, and `ruff>=0.6.2`. Configure pytest with `testpaths = ["tests"]` and Ruff with `target-version = "py312"`.
 
-Add these exceptions to `.gitignore` so the isolated lock and the example migration added later are committed:
+Add this exception to `.gitignore` so the isolated lock is committed:
 
 ```gitignore
 !examples/cdk/uv.lock
-!examples/proj1/testapp/migrations/
-!examples/proj1/testapp/migrations/*.py
 ```
 
 Also add `examples/cdk/cdk.out/` explicitly to `.gitignore` and create
@@ -305,48 +303,7 @@ uv run --project examples/cdk ruff check examples/cdk
 
 Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after staging the new files.
 
-### Task 5: Reusable Django Connection Settings
-
-**Files:**
-- Create: `examples/proj1/config/settings_live.py`
-- Create: `tests/test_live_settings_contract.py`
-
-**Interfaces:**
-- Consumes: environment variables `NAME`, `HOST`, `PORT`, `USER`, and `DB_PASSWORD` supplied by the human operator.
-- Produces: a TLS-required `DATABASES["default"]` usable by arbitrary Django management commands, scripts, interactive shells, and AI-agent probes.
-
-- [ ] **Step 1: Write AWS-free contract tests**
-
-Patch the five environment variables and import `config.settings_live`; assert the database dictionary equals the standard settings plus `OPTIONS={"ssl": True}`. Parameterize missing/empty variables and assert import raises `ImproperlyConfigured` naming only the missing non-secret key. Assert importing settings does not initialize a connection and source text contains no password value.
-
-- [ ] **Step 2: Run tests and verify failure**
-
-Run: `uv run --with pytest pytest tests/test_live_settings_contract.py -v`
-
-Expected: FAIL because `settings_live.py` does not exist.
-
-- [ ] **Step 3: Implement dedicated live settings**
-
-Import defaults from `.settings`, replace `DATABASES` entirely from the five required environment variables, convert `PORT` to `int`, set `ENGINE="django_redshift_backend"`, and set `OPTIONS={"ssl": True}`. Never build or print a database URL.
-
-- [ ] **Step 4: Verify and commit**
-
-Run:
-
-```powershell
-uv run --with pytest pytest tests/test_live_settings_contract.py -q
-uv run --only-dev ruff check examples/proj1/config/settings_live.py tests/test_live_settings_contract.py
-git diff --check
-```
-
-Commit:
-
-```powershell
-git add examples/proj1/config/settings_live.py tests/test_live_settings_contract.py
-git commit -m "test: add reusable live Redshift settings"
-```
-
-### Task 6: Operator Guide and Release Evidence Template
+### Task 5: Operator Guide and Release Evidence Template
 
 **Files:**
 - Create: `examples/cdk/README.md`
@@ -354,7 +311,7 @@ git commit -m "test: add reusable live Redshift settings"
 - Modify: `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
 
 **Interfaces:**
-- Consumes: commands and outputs from Tasks 1-5.
+- Consumes: commands and outputs from Tasks 1-4 plus the existing `examples/proj1/config/settings.py` `DATABASE_URL` interface.
 - Produces: an end-to-end human runbook and sanitized evidence checklist for release 6.0.0.
 
 - [ ] **Step 1: Write the runbook**
@@ -363,8 +320,11 @@ Document exact commands for prerequisites, Python CDK bootstrap, setting the
 three fixed environment variables, plain `cdk deploy`, exporting the non-secret
 stack outputs, examples of freely selected Django or SQL probes, plain
 `cdk destroy`, and read-only cleanup verification. Do not prescribe a
-repository-owned validation command; show how a selected Django command uses
-`--settings=config.settings_live`. The
+repository-owned validation command; show how to URL-escape `DB_PASSWORD`, set
+`DATABASE_URL=redshift://<user>:<password>@<host>:<port>/<database>`, and run a
+selected command through the existing `config.settings`. Include the existing
+example's required `SECRET_KEY` environment value and the equivalent ignored
+`.env` form. The
 password handoff must use this PowerShell shape:
 
 ```powershell
@@ -407,7 +367,7 @@ Inspect every match and confirm it is an instruction or redaction warning, not a
 
 Commit: `git commit -am "docs: add live Redshift release runbook"` after staging new files.
 
-### Task 7: AWS-Free CI, Final Verification, and Stacked PR Recording
+### Task 6: AWS-Free CI, Final Verification, and Stacked PR Recording
 
 **Files:**
 - Create: `.github/workflows/live-validation-contract.yml`
@@ -415,7 +375,7 @@ Commit: `git commit -am "docs: add live Redshift release runbook"` after staging
 - Modify: PR #9 and tracking PR #1; do not create temporary PR-body files.
 
 **Interfaces:**
-- Consumes: complete isolated project and Django contract tests.
+- Consumes: the complete isolated CDK project and operator documentation.
 - Produces: blocking AWS-free synthesis/contract checks and a reviewable stacked PR ready for the later human AWS run.
 
 - [ ] **Step 1: Add the AWS-free workflow**
@@ -426,7 +386,6 @@ Use `actions/checkout@v6` and `astral-sh/setup-uv@v7` with Python 3.12. Run exac
 - run: uv sync --project examples/cdk --locked --all-groups
 - run: uv run --project examples/cdk pytest examples/cdk/tests -q
 - run: uv run --project examples/cdk ruff check examples/cdk
-- run: uv run --with pytest pytest tests/test_live_settings_contract.py -q
 ```
 
 Do not add AWS credentials, OIDC permissions, environment secrets, deploy, or destroy steps.
@@ -439,7 +398,6 @@ Run:
 uv sync --project examples/cdk --locked --all-groups
 uv run --project examples/cdk pytest examples/cdk/tests -q
 uv run --project examples/cdk ruff check examples/cdk
-uv run --with pytest pytest tests/test_live_settings_contract.py -q
 uv run --only-dev tox -v
 uv build
 uv run --only-dev twine check dist/*
