@@ -27,7 +27,6 @@ def _required(environ: Mapping[str, str], name: str) -> str:
 @dataclass(frozen=True)
 class ValidationConfig:
     password: str
-    expires_at: str
     account: str
     region: str
     allowed_cidr: str
@@ -45,7 +44,6 @@ class ValidationConfig:
     ) -> ValidationConfig:
         return cls(
             password=_required(environ, "DB_PASSWORD"),
-            expires_at=_required(environ, "REDSHIFT_LIVE_EXPIRES_AT"),
             account=_required(environ, "CDK_DEFAULT_ACCOUNT"),
             region=_required(environ, "CDK_DEFAULT_REGION"),
             allowed_cidr=validate_allowed_cidr(allowed_cidr),
