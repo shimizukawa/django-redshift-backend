@@ -4,7 +4,9 @@
 
 Approved for implementation on 2026-08-30. Implementation is release-gate work
 that follows the redesigned backend stack. It does not expand the initial
-authentication scope beyond username/password.
+authentication scope beyond username/password. Updated on 2026-08-31 to remove
+the operator-supplied expiration value and ineffective informational tag;
+prompt, verified `cdk destroy` remains the lifecycle control.
 
 ## Purpose
 
@@ -43,8 +45,8 @@ it never creates AWS resources from ordinary CI or from an application test.
 The CDK application is a Python project managed with `uv`. Its `cdk.json`
 defines the Python app command, so the operator runs plain `cdk deploy` from
 `examples/cdk/`. It defines one CloudFormation stack using CDK's standard
-AWS account and Region environment plus fixed process environment variables
-for the temporary password and expiration date. It creates:
+AWS account and Region environment plus a fixed process environment variable
+for the temporary password. It creates:
 
 1. A dedicated VPC with an internet gateway and three public subnets in
    distinct Availability Zones. It has no NAT gateway and no private workload
@@ -92,7 +94,7 @@ never weakens account policy automatically.
 The documented operator flow is:
 
 1. Configure AWS credentials and bootstrap the target account/Region once.
-2. Set the documented fixed environment variables and run `cdk deploy` from
+2. Set the documented password environment variable and run `cdk deploy` from
    `examples/cdk/`; `cdk.json` selects the Python application, which resolves
    the current IP and deploys through normal CDK behavior.
 3. Export non-secret connection settings from stack outputs and pass the same
@@ -144,8 +146,7 @@ cleanup must remain visible, and the operator must still run and verify
   expected and remains protected by the single-host security-group rule.
 - The workgroup has both a maximum capacity and a daily RPU-hour cutoff that
   disables user queries.
-- Every resource has `Purpose=django-redshift-backend-live-validation` and an
-  expiration tag supplied by the operator.
+- Every resource has `Purpose=django-redshift-backend-live-validation`.
 - Each public subnet has enough free addresses for the Serverless workgroup;
   synthesis tests pin the subnet topology and address ranges.
 - The README documents that `cdk destroy` must run after every session, how to

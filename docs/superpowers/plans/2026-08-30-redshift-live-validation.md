@@ -4,7 +4,7 @@
 
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
-**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the runbook maps its outputs and `DB_PASSWORD` into the `DATABASE_URL` already consumed by `examples/proj1/config/settings.py`.
+**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads `DB_PASSWORD` and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the runbook maps its outputs and `DB_PASSWORD` into the `DATABASE_URL` already consumed by `examples/proj1/config/settings.py`.
 
 **Tech Stack:** Python 3.12, `uv`, AWS CDK v2 for Python (`aws-cdk-lib`), pytest, AWS CLI v2, Django management commands, and Amazon Redshift Serverless. No TypeScript or JavaScript CDK application is used.
 
@@ -23,7 +23,7 @@
 - Use base capacity 4 RPU only in a Region where Redshift Serverless supports it; fail preflight otherwise.
 - Set a conservative maximum capacity and a daily `serverless-compute` usage limit with breach action `deactivate`.
 - Create no final or manual snapshot. Destroy both workgroup and namespace, then verify that both are gone.
-- Tag resources with `Purpose=django-redshift-backend-live-validation` and the operator-supplied `ExpiresAt` value.
+- Tag resources with `Purpose=django-redshift-backend-live-validation`.
 - Keep all committed tests AWS-free. Commands that contact AWS are explicit operator actions only.
 - Keep `examples/cdk/cdk.out/` ignored; it contains the synthesized password value and must be removed after destroy.
 
@@ -42,7 +42,7 @@
 - Modify: `.gitignore`
 
 **Interfaces:**
-- Consumes: Python 3.12, fixed environment values `DB_PASSWORD` and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
+- Consumes: Python 3.12, fixed environment value `DB_PASSWORD`, plus CDK's standard account and Region environment.
 - Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and commands executed with `examples/cdk/` as their working directory.
 
 - [x] **Step 1: Create the isolated project metadata**
@@ -91,10 +91,9 @@ def test_allowed_cidr_requires_public_ipv4_host(value):
         validate_allowed_cidr(value)
 
 
-def test_environment_supplies_password_and_expiration():
+def test_environment_supplies_password():
     environ = {
         "DB_PASSWORD": "synthesis-only-value-A1",
-        "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
         "CDK_DEFAULT_REGION": "ap-northeast-1",
     }
@@ -114,11 +113,11 @@ Expected: collection fails because `cdk_app.config` does not exist.
 
 - [x] **Step 5: Implement the immutable configuration object**
 
-Implement `ValidationConfig` as a frozen dataclass. Require non-empty `expires_at` and `region`; use prefix `django-redshift-live`; and pin `base_capacity=4`, `max_capacity=8`, and `daily_rpu_hours=8`. Use `ipaddress.ip_network(value, strict=True)` and reject non-IPv4, non-global, or prefix lengths other than 32. Tests may use `8.8.8.8/32` as a syntactically global address for synthesis only; no test deploys or contacts that address.
+Implement `ValidationConfig` as a frozen dataclass. Require a non-empty `region`; use prefix `django-redshift-live`; and pin `base_capacity=4`, `max_capacity=8`, and `daily_rpu_hours=8`. Use `ipaddress.ip_network(value, strict=True)` and reject non-IPv4, non-global, or prefix lengths other than 32. Tests may use `8.8.8.8/32` as a syntactically global address for synthesis only; no test deploys or contacts that address.
 
 - [x] **Step 6: Add the CDK entry point**
 
-`app.py` must read the two fixed environment variables, resolve the public
+`app.py` must read the fixed `DB_PASSWORD` environment variable, resolve the public
 IPv4 through an injectable standard-library function, construct
 `ValidationConfig`, instantiate `LiveValidationStack`, and call `app.synth()`.
 Use `CDK_DEFAULT_ACCOUNT` and `CDK_DEFAULT_REGION` through `cdk.Environment`.
@@ -185,7 +184,7 @@ Expected: FAIL because `LiveValidationStack` is not defined.
 
 - [x] **Step 3: Implement the minimum network stack**
 
-Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configuration using a `/24` mask. Reject synthesis unless CDK resolves exactly three selected availability zones. Create a dedicated security group and add only `Peer.ipv4(config.allowed_cidr)` on `Port.tcp(5439)`. Apply `Purpose` and `ExpiresAt` tags at stack scope.
+Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configuration using a `/24` mask. Reject synthesis unless CDK resolves exactly three selected availability zones. Create a dedicated security group and add only `Peer.ipv4(config.allowed_cidr)` on `Port.tcp(5439)`. Apply the `Purpose` tag at stack scope.
 
 - [x] **Step 4: Verify and commit**
 
@@ -195,7 +194,6 @@ Run:
 uv run --directory examples/cdk python -m pytest tests/test_network_stack.py -q
 uv run --directory examples/cdk ruff check .
 $env:DB_PASSWORD = 'synthesis-only-value-A1'
-$env:REDSHIFT_LIVE_EXPIRES_AT = '2026-08-31'
 Push-Location examples/cdk
 cdk synth
 Pop-Location
@@ -263,12 +261,12 @@ Commit: `git commit -am "feat: define disposable Redshift validation stack"` aft
 - Create: `examples/cdk/tests/test_app.py`
 
 **Interfaces:**
-- Consumes: fixed environment variables, CDK's standard account/Region, and an injectable public-IP lookup response.
+- Consumes: fixed `DB_PASSWORD`, CDK's standard account/Region, and an injectable public-IP lookup response.
 - Produces: a Python CDK application runnable as plain `cdk deploy` and `cdk destroy` from `examples/cdk/`.
 
 - [x] **Step 1: Write failing pure-unit tests**
 
-Cover newline-trimmed IPv4 lookup, rejection of IPv6/private/malformed responses, missing fixed environment variables, password exclusion from exception messages, CDK standard account/Region selection, and Region membership in the documented 4-RPU allowlist. Mock all network access; tests must never contact an IP service or AWS.
+Cover newline-trimmed IPv4 lookup, rejection of IPv6/private/malformed responses, missing required environment values, password exclusion from exception messages, CDK standard account/Region selection, and Region membership in the documented 4-RPU allowlist. Mock all network access; tests must never contact an IP service or AWS.
 
 - [x] **Step 2: Run tests and verify failure**
 
@@ -279,7 +277,7 @@ Expected: FAIL because the application helpers are absent.
 - [x] **Step 3: Implement environment and synthesis preflight**
 
 Use `urllib.request` only for public-IP lookup. Require
-`DB_PASSWORD`, `REDSHIFT_LIVE_EXPIRES_AT`, `CDK_DEFAULT_ACCOUNT`, and
+`DB_PASSWORD`, `CDK_DEFAULT_ACCOUNT`, and
 `CDK_DEFAULT_REGION`. Do not accept CDK context or custom command-line values
 and never log the environment mapping.
 
@@ -321,7 +319,7 @@ Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after stagin
 - [x] **Step 1: Write the runbook**
 
 Document exact commands for prerequisites, Python CDK bootstrap, setting the
-two fixed environment variables, plain `cdk deploy`, exporting the non-secret
+the fixed password environment variable, plain `cdk deploy`, exporting the non-secret
 stack outputs, examples of freely selected Django or SQL probes, plain
 `cdk destroy`, and read-only cleanup verification. Do not prescribe a
 repository-owned validation command; show how to URL-escape `DB_PASSWORD`, set
@@ -333,7 +331,6 @@ password handoff must use this PowerShell shape:
 
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
-$env:REDSHIFT_LIVE_EXPIRES_AT = 'YYYY-MM-DD'
 Push-Location examples/cdk
 cdk deploy
 Pop-Location
@@ -431,12 +428,13 @@ Add #9 to the stack, replace stale current-status text, and append a progress co
 
 - [ ] **Step 6: Stop before AWS deployment**
 
-Report the exact reviewed operator command sequence. A human must separately choose the AWS account/Region, confirm current pricing and permissions, set the fixed environment values, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
+Report the exact reviewed operator command sequence. A human must separately choose the AWS account/Region, confirm current pricing and permissions, set `DB_PASSWORD`, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
 
 ## Implementation Results
 
 - Python CDK project and lock completed with uv 0.11.29 and Python 3.12.
-- AWS-free CDK contract suite: 21 passed in 44.67 seconds in the final run.
+- AWS-free CDK contract suite: 20 passed in 50.08 seconds after removing the
+  expiration-variable contract.
 - CDK project Ruff check: passed.
 - Full backend tox matrix: 14 Python/Django environments passed; lint and
   package checks passed in 425.08 seconds. Django 4.2 environments reported
@@ -445,7 +443,7 @@ Report the exact reviewed operator command sequence. A human must separately cho
 - Wheel and sdist passed Twine validation as part of the tox `check`
   environment.
 - Local plain `cdk synth` was not run because the CDK CLI is not installed on
-  this workstation. Template synthesis is exercised by the 21 AWS-free tests;
+  this workstation. Template synthesis is exercised by the 20 AWS-free tests;
   installing CDK CLI v2 remains an operator prerequisite.
 - Real Redshift deployment, validation, and destruction: pending explicit
   human execution before release.

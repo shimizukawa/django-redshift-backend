@@ -6,7 +6,6 @@ from app import build_config, resolve_public_ipv4
 def valid_environment():
     return {
         "DB_PASSWORD": "synthesis-only-value-A1",
-        "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
         "CDK_DEFAULT_REGION": "ap-northeast-1",
     }

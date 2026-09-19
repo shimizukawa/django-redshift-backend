@@ -19,7 +19,6 @@ class LiveValidationStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         Tags.of(self).add("Purpose", "django-redshift-backend-live-validation")
-        Tags.of(self).add("ExpiresAt", config.expires_at)
 
         vpc = ec2.CfnVPC(
             self,

@@ -31,12 +31,10 @@ S3, ECR, and IAM resources and is not removed with this validation stack.
 
 ## Deploy
 
-Choose a temporary password that satisfies Redshift's password rules and an
-expiration date that identifies when this environment should no longer exist:
+Choose a temporary password that satisfies Redshift's password rules:
 
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
-$env:REDSHIFT_LIVE_EXPIRES_AT = 'YYYY-MM-DD'
 Push-Location examples/cdk
 cdk deploy
 Pop-Location
@@ -102,7 +100,6 @@ After removal, delete the local assembly and clear credentials:
 Remove-Item -Recurse -Force examples/cdk/cdk.out
 Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
 Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
-Remove-Item Env:REDSHIFT_LIVE_EXPIRES_AT -ErrorAction SilentlyContinue
 ```
 
 The usage limit turns off user queries after 8 RPU-hours per day, and the
