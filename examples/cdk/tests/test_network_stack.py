@@ -8,7 +8,6 @@ from cdk_app.stack import LiveValidationStack
 def synthesize_network():
     config = ValidationConfig(
         password="synthesis-only-value-A1",
-        expires_at="2026-08-31",
         account="123456789012",
         region="ap-northeast-1",
         allowed_cidr="8.8.8.8/32",

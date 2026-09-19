@@ -12,10 +12,9 @@ def test_allowed_cidr_requires_public_ipv4_host(value):
         validate_allowed_cidr(value)
 
 
-def test_environment_supplies_password_and_expiration():
+def test_environment_supplies_password_without_expiration_variable():
     environ = {
         "DB_PASSWORD": "synthesis-only-value-A1",
-        "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
         "CDK_DEFAULT_REGION": "ap-northeast-1",
     }
@@ -27,7 +26,6 @@ def test_environment_supplies_password_and_expiration():
 
     assert config.allowed_cidr == "8.8.8.8/32"
     assert config.password == "synthesis-only-value-A1"
-    assert config.expires_at == "2026-08-31"
     assert config.account == "123456789012"
     assert config.region == "ap-northeast-1"
     assert config.base_capacity == 4
@@ -39,7 +37,6 @@ def test_environment_supplies_password_and_expiration():
     "name",
     [
         "DB_PASSWORD",
-        "REDSHIFT_LIVE_EXPIRES_AT",
         "CDK_DEFAULT_ACCOUNT",
         "CDK_DEFAULT_REGION",
     ],
@@ -47,7 +44,6 @@ def test_environment_supplies_password_and_expiration():
 def test_environment_rejects_missing_required_value(name):
     environ = {
         "DB_PASSWORD": "synthesis-only-value-A1",
-        "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
         "CDK_DEFAULT_REGION": "ap-northeast-1",
     }

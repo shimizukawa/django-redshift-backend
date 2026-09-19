@@ -10,7 +10,6 @@ PASSWORD = "synthesis-only-value-A1"
 def synthesize_template():
     config = ValidationConfig(
         password=PASSWORD,
-        expires_at="2026-08-31",
         account="123456789012",
         region="ap-northeast-1",
         allowed_cidr="8.8.8.8/32",
