@@ -23,7 +23,7 @@
 - Use base capacity 4 RPU only in a Region where Redshift Serverless supports it; fail preflight otherwise.
 - Set a conservative maximum capacity and a daily `serverless-compute` usage limit with breach action `deactivate`.
 - Create no final or manual snapshot. Destroy both workgroup and namespace, then verify that both are gone.
-- Tag resources with `Purpose=django-redshift-backend-live-validation` and operator-supplied `Owner` and `ExpiresAt` values.
+- Tag resources with `Purpose=django-redshift-backend-live-validation` and the operator-supplied `ExpiresAt` value.
 - Keep all committed tests AWS-free. Commands that contact AWS are explicit operator actions only.
 - Keep `examples/cdk/cdk.out/` ignored; it contains the synthesized password value and must be removed after destroy.
 
@@ -42,7 +42,7 @@
 - Modify: `.gitignore`
 
 **Interfaces:**
-- Consumes: Python 3.12, fixed environment values `DB_PASSWORD`, `REDSHIFT_LIVE_OWNER`, and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
+- Consumes: Python 3.12, fixed environment values `DB_PASSWORD` and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
 - Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and the `uv run --project examples/cdk ...` command prefix.
 
 - [ ] **Step 1: Create the isolated project metadata**
@@ -91,10 +91,9 @@ def test_allowed_cidr_requires_public_ipv4_host(value):
         validate_allowed_cidr(value)
 
 
-def test_environment_supplies_password_and_ownership_values():
+def test_environment_supplies_password_and_expiration():
     environ = {
         "DB_PASSWORD": "synthesis-only-value-A1",
-        "REDSHIFT_LIVE_OWNER": "release-operator",
         "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
         "CDK_DEFAULT_REGION": "ap-northeast-1",
@@ -115,11 +114,11 @@ Expected: collection fails because `cdk_app.config` does not exist.
 
 - [ ] **Step 5: Implement the immutable configuration object**
 
-Implement `ValidationConfig` as a frozen dataclass. Require non-empty `owner`, `expires_at`, and `region`; use prefix `django-redshift-live`; and pin `base_capacity=4`, `max_capacity=8`, and `daily_rpu_hours=8`. Use `ipaddress.ip_network(value, strict=True)` and reject non-IPv4, non-global, or prefix lengths other than 32. Tests may use `8.8.8.8/32` as a syntactically global address for synthesis only; no test deploys or contacts that address.
+Implement `ValidationConfig` as a frozen dataclass. Require non-empty `expires_at` and `region`; use prefix `django-redshift-live`; and pin `base_capacity=4`, `max_capacity=8`, and `daily_rpu_hours=8`. Use `ipaddress.ip_network(value, strict=True)` and reject non-IPv4, non-global, or prefix lengths other than 32. Tests may use `8.8.8.8/32` as a syntactically global address for synthesis only; no test deploys or contacts that address.
 
 - [ ] **Step 6: Add the CDK entry point**
 
-`app.py` must read the three fixed environment variables, resolve the public
+`app.py` must read the two fixed environment variables, resolve the public
 IPv4 through an injectable standard-library function, construct
 `ValidationConfig`, instantiate `LiveValidationStack`, and call `app.synth()`.
 Use `CDK_DEFAULT_ACCOUNT` and `CDK_DEFAULT_REGION` through `cdk.Environment`.
@@ -186,7 +185,7 @@ Expected: FAIL because `LiveValidationStack` is not defined.
 
 - [ ] **Step 3: Implement the minimum network stack**
 
-Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configuration using a `/24` mask. Reject synthesis unless CDK resolves exactly three selected availability zones. Create a dedicated security group and add only `Peer.ipv4(config.allowed_cidr)` on `Port.tcp(5439)`. Apply `Purpose`, `Owner`, and `ExpiresAt` tags at stack scope.
+Create a VPC with `nat_gateways=0`, `max_azs=3`, and one `PUBLIC` subnet configuration using a `/24` mask. Reject synthesis unless CDK resolves exactly three selected availability zones. Create a dedicated security group and add only `Peer.ipv4(config.allowed_cidr)` on `Port.tcp(5439)`. Apply `Purpose` and `ExpiresAt` tags at stack scope.
 
 - [ ] **Step 4: Verify and commit**
 
@@ -196,7 +195,6 @@ Run:
 uv run --project examples/cdk pytest examples/cdk/tests/test_network_stack.py -q
 uv run --project examples/cdk ruff check examples/cdk
 $env:DB_PASSWORD = 'synthesis-only-value-A1'
-$env:REDSHIFT_LIVE_OWNER = 'test'
 $env:REDSHIFT_LIVE_EXPIRES_AT = '2026-08-31'
 Push-Location examples/cdk
 cdk synth
@@ -274,8 +272,7 @@ Expected: FAIL because the application helpers are absent.
 - [ ] **Step 3: Implement environment and synthesis preflight**
 
 Use `urllib.request` only for public-IP lookup. Require
-`DB_PASSWORD`, `REDSHIFT_LIVE_OWNER`,
-`REDSHIFT_LIVE_EXPIRES_AT`, `CDK_DEFAULT_ACCOUNT`, and
+`DB_PASSWORD`, `REDSHIFT_LIVE_EXPIRES_AT`, `CDK_DEFAULT_ACCOUNT`, and
 `CDK_DEFAULT_REGION`. Do not accept CDK context or custom command-line values
 and never log the environment mapping.
 
@@ -317,7 +314,7 @@ Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after stagin
 - [ ] **Step 1: Write the runbook**
 
 Document exact commands for prerequisites, Python CDK bootstrap, setting the
-three fixed environment variables, plain `cdk deploy`, exporting the non-secret
+two fixed environment variables, plain `cdk deploy`, exporting the non-secret
 stack outputs, examples of freely selected Django or SQL probes, plain
 `cdk destroy`, and read-only cleanup verification. Do not prescribe a
 repository-owned validation command; show how to URL-escape `DB_PASSWORD`, set
@@ -329,7 +326,6 @@ password handoff must use this PowerShell shape:
 
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
-$env:REDSHIFT_LIVE_OWNER = 'operator-name'
 $env:REDSHIFT_LIVE_EXPIRES_AT = 'YYYY-MM-DD'
 Push-Location examples/cdk
 cdk deploy
