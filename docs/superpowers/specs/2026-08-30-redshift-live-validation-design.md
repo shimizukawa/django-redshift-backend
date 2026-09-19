@@ -110,10 +110,10 @@ workgroup leaves storage-bearing namespace resources behind.
 The stack outputs the non-secret values needed to connect: database name,
 endpoint host, port, admin username, Region, and accepted CIDR. The local
 `DB_PASSWORD` value completes the connection settings. Documentation shows how
-to map these values into `examples/proj1` through a dedicated settings module
-using `ENGINE=django_redshift_backend` and TLS; it does not rely on the
-example's development `DATABASE_URL` convention or introduce special test-only
-backend options.
+to combine those values into a `redshift://` `DATABASE_URL` for the existing
+`examples/proj1/config/settings.py`, either through the process environment or
+an ignored `.env` file. No live-only Django settings module or backend option
+is introduced; TLS remains enabled by the backend's normal connection path.
 
 There is no repository-owned `live_validate` command and no fixed validation
 sequence. During the interval between human-operated `cdk deploy` and
