@@ -16,7 +16,7 @@
 - Use `uv` for the isolated live-validation environment and every Python command.
 - Never deploy AWS resources from ordinary CI or an application test.
 - Use username/password database authentication only; IAM, browser SSO, and provider authentication remain out of scope.
-- Read `REDSHIFT_LIVE_PASSWORD` only from the process environment, set `AdminUserPassword`, and never print or output it.
+- Read `DB_PASSWORD` only from the process environment, set `AdminUserPassword`, and never print or output it.
 - Accept only a single-host public IPv4 `/32`; never default to or permit `0.0.0.0/0`.
 - Use three public subnets in distinct Availability Zones, an internet gateway, no NAT gateway, and no operator-managed Elastic IP.
 - Expose only TCP 5439 from the accepted `/32`; require TLS in Django settings.
@@ -42,7 +42,7 @@
 - Modify: `.gitignore`
 
 **Interfaces:**
-- Consumes: Python 3.12, fixed environment values `REDSHIFT_LIVE_PASSWORD`, `REDSHIFT_LIVE_OWNER`, and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
+- Consumes: Python 3.12, fixed environment values `DB_PASSWORD`, `REDSHIFT_LIVE_OWNER`, and `REDSHIFT_LIVE_EXPIRES_AT`, plus CDK's standard account and Region environment.
 - Produces: `ValidationConfig.from_environment(environ: Mapping[str, str], *, allowed_cidr: str) -> ValidationConfig`, `validate_allowed_cidr(value: str) -> str`, and the `uv run --project live_validation ...` command prefix.
 
 - [ ] **Step 1: Create the isolated project metadata**
@@ -95,7 +95,7 @@ def test_allowed_cidr_requires_public_ipv4_host(value):
 
 def test_environment_supplies_password_and_ownership_values():
     environ = {
-        "REDSHIFT_LIVE_PASSWORD": "synthesis-only-value-A1",
+        "DB_PASSWORD": "synthesis-only-value-A1",
         "REDSHIFT_LIVE_OWNER": "release-operator",
         "REDSHIFT_LIVE_EXPIRES_AT": "2026-08-31",
         "CDK_DEFAULT_ACCOUNT": "123456789012",
@@ -197,7 +197,7 @@ Run:
 ```powershell
 uv run --project live_validation pytest live_validation/tests/test_network_stack.py -q
 uv run --project live_validation ruff check live_validation
-$env:REDSHIFT_LIVE_PASSWORD = 'synthesis-only-value-A1'
+$env:DB_PASSWORD = 'synthesis-only-value-A1'
 $env:REDSHIFT_LIVE_OWNER = 'test'
 $env:REDSHIFT_LIVE_EXPIRES_AT = '2026-08-31'
 Push-Location live_validation
@@ -276,7 +276,7 @@ Expected: FAIL because the application helpers are absent.
 - [ ] **Step 3: Implement environment and synthesis preflight**
 
 Use `urllib.request` only for public-IP lookup. Require
-`REDSHIFT_LIVE_PASSWORD`, `REDSHIFT_LIVE_OWNER`,
+`DB_PASSWORD`, `REDSHIFT_LIVE_OWNER`,
 `REDSHIFT_LIVE_EXPIRES_AT`, `CDK_DEFAULT_ACCOUNT`, and
 `CDK_DEFAULT_REGION`. Do not accept CDK context or custom command-line values
 and never log the environment mapping.
@@ -315,7 +315,7 @@ Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after stagin
 - Create: `tests/test_live_validation_contract.py`
 
 **Interfaces:**
-- Consumes: environment variables `NAME`, `HOST`, `PORT`, `USER`, and `PASSWORD` supplied by the human operator.
+- Consumes: environment variables `NAME`, `HOST`, `PORT`, `USER`, and `DB_PASSWORD` supplied by the human operator.
 - Produces: a TLS-required `DATABASES["default"]`, committed migration SQL coverage, and `live_validate.py` returning zero only after connection, migration, `sqlmigrate`, and CRUD succeed.
 
 - [ ] **Step 1: Write AWS-free contract tests**
@@ -391,18 +391,17 @@ stack outputs, running `live_validate.py`, plain `cdk destroy`, and read-only
 cleanup verification. The password handoff must use this PowerShell shape:
 
 ```powershell
-$env:REDSHIFT_LIVE_PASSWORD = Read-Host 'Temporary Redshift password'
+$env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
 $env:REDSHIFT_LIVE_OWNER = 'operator-name'
 $env:REDSHIFT_LIVE_EXPIRES_AT = 'YYYY-MM-DD'
 Push-Location live_validation
 cdk deploy
 Pop-Location
-$env:PASSWORD = $env:REDSHIFT_LIVE_PASSWORD
 ```
 
 The runbook must explain that the password is present in the ignored local
 `cdk.out/` assembly, must not be committed or uploaded, and must be cleared
-along with `$env:PASSWORD` after validation and destroy.
+from `DB_PASSWORD` after validation and destroy.
 
 State estimated cost inputs without promising a fixed price; link the AWS
 pricing page and require the operator to confirm current pricing before
