@@ -2,8 +2,8 @@
 
 ## Status
 
-Approved for specification on 2026-08-30. Implementation is release-gate
-work that follows the redesigned backend stack. It does not expand the initial
+Approved for implementation on 2026-08-30. Implementation is release-gate work
+that follows the redesigned backend stack. It does not expand the initial
 authentication scope beyond username/password.
 
 ## Purpose
@@ -61,14 +61,25 @@ handled by rerunning deploy, which updates only the security-group rule. The
 CDK source must reject a non-single-host CIDR and must never default to
 `0.0.0.0/0`.
 
-The stack outputs only endpoint address, port, database name, workgroup name,
-namespace name, and the accepted CIDR. It does not receive, create, output, or
-persist a Redshift password. The operator provides the password only through a
-local process environment when running the validation.
+The namespace sets `ManageAdminPassword=true`, so Redshift generates its admin
+password and manages it in AWS Secrets Manager. The stack outputs only endpoint
+address, port, database name, admin username, workgroup name, namespace name,
+and the accepted CIDR. It does not output the secret ARN or password.
+
+After deployment, the human operator explicitly retrieves the Redshift-managed
+password from Secrets Manager and passes it to the Django validation process
+through the local process environment. Repository automation does not retrieve
+the password. The password is never written to a generated settings file,
+shell script, CDK context, CloudFormation parameter or output, or repository
+artifact. Destroy verification confirms that the namespace and its
+Redshift-managed admin secret are gone.
 
 CDK requires one per-account/Region bootstrap stack (`CDKToolkit`). That is an
 intentional one-time prerequisite and is outside the disposable validation
-stack. The documentation identifies its retained S3/ECR/IAM resources.
+stack. The documentation identifies its retained S3/ECR/IAM resources. VPC
+Block Public Access must permit this dedicated VPC to host a public workgroup;
+the deploy preflight fails with a remediation message when account or Region
+policy prevents public access rather than weakening that policy automatically.
 
 ## Lifecycle
 
@@ -77,8 +88,9 @@ The documented operator flow is:
 1. Configure AWS credentials and bootstrap the target account/Region once.
 2. Run the deploy wrapper, which resolves the current IP, deploys the stack,
    and waits for the workgroup endpoint.
-3. Export non-secret connection settings from stack outputs and provide the
-   Redshift username/password locally.
+3. Export non-secret connection settings from stack outputs, have the human
+   operator retrieve the Redshift-managed password, and provide the
+   username/password locally to the validation process.
 4. Run the live-validation command against `examples/proj1`.
 5. On success or failure, run the destroy wrapper. It destroys the
    CloudFormation stack and verifies that the workgroup and namespace are no
@@ -90,9 +102,11 @@ workgroup leaves storage-bearing namespace resources behind.
 ## Live Validation Contract
 
 The validation runner receives standard Django database settings through
-environment variables: `NAME`, `HOST`, `PORT`, `USER`, and `PASSWORD`. It uses
-`ENGINE=django_redshift_backend`; no special test-only backend settings are
-allowed.
+environment variables: `NAME`, `HOST`, `PORT`, `USER`, and `PASSWORD`. A
+dedicated validation settings module maps those variables directly into
+`DATABASES["default"]` with `ENGINE=django_redshift_backend` and TLS enabled;
+it does not rely on `examples/proj1`'s development `DATABASE_URL` convention or
+introduce special test-only backend options.
 
 Against `examples/proj1`, it must:
 
@@ -117,12 +131,16 @@ cleanup: the operator must see a clear destroy instruction and status.
 - No inbound `0.0.0.0/0` rule is permitted.
 - The only public port is 5439, restricted to the deployer's dynamic `/32`.
 - TLS is required by the live-validation settings.
-- No NAT gateway, Elastic IP, VPC endpoint, manual snapshot, or persistent
-  database resource is created by this stack.
+- No NAT gateway, operator-managed Elastic IP, VPC endpoint, manual snapshot,
+  or persistent database resource is created by this stack. Redshift's
+  service-managed public address for the explicitly public workgroup is
+  expected and remains protected by the single-host security-group rule.
 - The workgroup has both a maximum capacity and a daily RPU-hour cutoff that
   disables user queries.
 - Every resource has `Purpose=django-redshift-backend-live-validation`, plus
   owner and expiration tags supplied by the operator.
+- Each public subnet has enough free addresses for the Serverless workgroup;
+  synthesis tests pin the subnet topology and address ranges.
 - The README documents that `cdk destroy` must run after every session and how
   to check for retained CloudFormation, Redshift, and snapshot resources.
 
