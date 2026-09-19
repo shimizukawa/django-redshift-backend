@@ -1,0 +1,28 @@
+name: Live validation contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/live-validation-contract.yml"
+      - "examples/cdk/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/live-validation-contract.yml"
+      - "examples/cdk/**"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - run: uv sync --directory examples/cdk --locked --all-groups
+      - run: uv run --directory examples/cdk python -m pytest tests -q
+      - run: uv run --directory examples/cdk ruff check .
