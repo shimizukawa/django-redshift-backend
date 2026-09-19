@@ -24,8 +24,8 @@ it never creates AWS resources from ordinary CI or from an application test.
   unattended cost.
 - Permit only the machine executing the validation to reach the public
   endpoint, even when that machine has a dynamic public IP address.
-- Run the existing `examples/proj1` application as the primary live validation
-  target, including Django migration and the existing SQL migration checks.
+- Make the deployed endpoint usable from `examples/proj1` and other local
+  inspection tools without prescribing one mandatory validation command.
 - Preserve normal CI as AWS-free; real validation is an explicit manual
   release gate.
 
@@ -95,7 +95,9 @@ The documented operator flow is:
    the current IP and deploys through normal CDK behavior.
 3. Export non-secret connection settings from stack outputs and pass the same
    local password environment value to the Django validation process.
-4. Run the live-validation command against `examples/proj1`.
+4. While the stack is alive, have a human or AI agent run the relevant Django
+   commands, SQL inspection, ORM probes, or other validation against the real
+   endpoint.
 5. On success or failure, run `cdk destroy`. Then run the documented AWS CLI
    read-only checks to verify that the workgroup and namespace are no longer
    present. No manual snapshot is created.
@@ -105,30 +107,28 @@ workgroup leaves storage-bearing namespace resources behind.
 
 ## Live Validation Contract
 
-The validation runner receives standard Django database settings through
-environment variables: `NAME`, `HOST`, `PORT`, `USER`, and `DB_PASSWORD`. A
-dedicated validation settings module maps those variables directly into
-`DATABASES["default"]` with `ENGINE=django_redshift_backend` and TLS enabled;
-it does not rely on `examples/proj1`'s development `DATABASE_URL` convention or
-introduce special test-only backend options.
+The stack outputs the non-secret values needed to connect: database name,
+endpoint host, port, admin username, Region, and accepted CIDR. The local
+`DB_PASSWORD` value completes the connection settings. Documentation shows how
+to map these values into `examples/proj1` through a dedicated settings module
+using `ENGINE=django_redshift_backend` and TLS; it does not rely on the
+example's development `DATABASE_URL` convention or introduce special test-only
+backend options.
 
-Against `examples/proj1`, it must:
+There is no repository-owned `live_validate` command and no fixed validation
+sequence. During the interval between human-operated `cdk deploy` and
+`cdk destroy`, a human or AI agent may run the commands appropriate to the
+question being investigated, including `check`, `migrate`, `sqlmigrate`, ORM
+probes, direct SQL, or focused reproduction scripts. The release record lists
+the exact commands actually run, package revision, Django version, driver
+version, Redshift Region, sanitized endpoint metadata, outcomes, and any data
+or objects that require cleanup.
 
-- check that Django can establish a TLS-protected password connection;
-- run `manage.py migrate` on the empty, dedicated namespace database;
-- run the repository's existing migration SQL checks, including the reusable
-  `sqlmigrate` coverage, against the live connection where that command needs
-  database access;
-- execute a small ORM smoke path that creates, reads, updates, and deletes a
-  representative model; and
-- report the exact commands, package revision, Django version, driver version,
-  Redshift Region, and sanitized endpoint metadata needed to record the result
-  in the release PR.
-
-The runner creates data only in the disposable namespace and must leave no
-credentials in console output, logs, or committed files. It has a cleanup trap
-for application-level objects but does not conceal a failed infrastructure
-cleanup: the operator must see a clear destroy instruction and status.
+Validation creates data only in the disposable namespace and must leave no
+credentials in console output, logs, or committed files. Application-level
+cleanup is the responsibility of the validation procedure being run; failed
+cleanup must remain visible, and the operator must still run and verify
+`cdk destroy`.
 
 ## Safety and Cost Controls
 
@@ -159,10 +159,11 @@ security-group rule, Serverless resource properties, outputs excluding secrets,
 and deletion dependency order.
 
 The existing backend test suite remains mandatory. The release PR adds a
-manual checklist template for the live run and records each run's sanitized
-result. A successful real-Redshift run is a release criterion for 6.0.0;
-failure blocks the release until the defect is fixed or the release scope is
-explicitly reconsidered.
+manual checklist template that records the selected live checks and their
+sanitized results without requiring a repository-owned runner. Sufficient
+real-Redshift evidence is a release criterion for 6.0.0; a relevant failure
+blocks the release until the defect is fixed or the release scope is explicitly
+reconsidered.
 
 ## Delivery
 

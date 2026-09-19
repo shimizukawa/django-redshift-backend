@@ -4,7 +4,7 @@
 
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
-**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the same local password is supplied to a dedicated Django settings module and validation runner.
+**Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads fixed environment variables and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; a dedicated Django settings module exposes the connection to commands and probes selected during each live session.
 
 **Tech Stack:** Python 3.12, `uv`, AWS CDK v2 for Python (`aws-cdk-lib`), pytest, AWS CLI v2, Django management commands, and Amazon Redshift Serverless. No TypeScript or JavaScript CDK application is used.
 
@@ -305,71 +305,45 @@ uv run --project examples/cdk ruff check examples/cdk
 
 Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after staging the new files.
 
-### Task 5: Django Live Settings, Migration Fixture, and ORM Smoke Runner
+### Task 5: Reusable Django Connection Settings
 
 **Files:**
 - Create: `examples/proj1/config/settings_live.py`
-- Create: `examples/proj1/testapp/migrations/__init__.py`
-- Create: `examples/proj1/testapp/migrations/0001_initial.py`
-- Create: `examples/proj1/live_validate.py`
-- Create: `tests/test_live_validation_contract.py`
+- Create: `tests/test_live_settings_contract.py`
 
 **Interfaces:**
 - Consumes: environment variables `NAME`, `HOST`, `PORT`, `USER`, and `DB_PASSWORD` supplied by the human operator.
-- Produces: a TLS-required `DATABASES["default"]`, committed migration SQL coverage, and `live_validate.py` returning zero only after connection, migration, `sqlmigrate`, and CRUD succeed.
+- Produces: a TLS-required `DATABASES["default"]` usable by arbitrary Django management commands, scripts, interactive shells, and AI-agent probes.
 
 - [ ] **Step 1: Write AWS-free contract tests**
 
-Patch the five environment variables and import `config.settings_live`; assert the database dictionary equals the standard settings plus `OPTIONS={"ssl": True}`. Parameterize missing/empty variables and assert import raises `ImproperlyConfigured` naming only the missing non-secret key. Assert source text contains no password value and that `live_validate.py --help` does not initialize a connection.
+Patch the five environment variables and import `config.settings_live`; assert the database dictionary equals the standard settings plus `OPTIONS={"ssl": True}`. Parameterize missing/empty variables and assert import raises `ImproperlyConfigured` naming only the missing non-secret key. Assert importing settings does not initialize a connection and source text contains no password value.
 
 - [ ] **Step 2: Run tests and verify failure**
 
-Run: `uv run --with pytest pytest tests/test_live_validation_contract.py -v`
+Run: `uv run --with pytest pytest tests/test_live_settings_contract.py -v`
 
-Expected: FAIL because `settings_live.py` and `live_validate.py` do not exist.
+Expected: FAIL because `settings_live.py` does not exist.
 
 - [ ] **Step 3: Implement dedicated live settings**
 
 Import defaults from `.settings`, replace `DATABASES` entirely from the five required environment variables, convert `PORT` to `int`, set `ENGINE="django_redshift_backend"`, and set `OPTIONS={"ssl": True}`. Never build or print a database URL.
 
-- [ ] **Step 4: Generate and commit the example migration**
+- [ ] **Step 4: Verify and commit**
 
 Run:
 
 ```powershell
-uv run --with "Django>=5.2,<5.3" --with django-environ examples/proj1/manage.py makemigrations testapp --settings=config.settings_live
-```
-
-Use dummy non-secret environment values and monkeypatch or settings-only invocation so generation does not open a socket. Inspect `0001_initial.py`; it must represent all existing `testapp` models, `DistKey`, and `SortKey` declarations without hand-editing generated state.
-
-- [ ] **Step 5: Implement the validation runner**
-
-The runner executes, in order, using `DJANGO_SETTINGS_MODULE=config.settings_live`:
-
-1. `django.setup()` and `connections["default"].ensure_connection()`;
-2. `call_command("migrate", interactive=False, verbosity=1)`;
-3. `call_command("sqlmigrate", "testapp", "0001", verbosity=1)`;
-4. create a `TestReferencedModel` and `TestModelWithMetaKeys` row;
-5. read and assert values, update `age`, refresh and assert, then delete both rows;
-6. report package revision, Django/driver versions, Region, and sanitized host/port/database/user metadata.
-
-Wrap execution in `try/finally`; attempt deletion of application rows in `finally`, preserve the original exception, and always print `Run the documented destroy command now.` Passwords and exception representations containing connection kwargs must never be printed.
-
-- [ ] **Step 6: Verify and commit**
-
-Run:
-
-```powershell
-uv run --with pytest pytest tests/test_live_validation_contract.py -q
-uv run --only-dev ruff check examples/proj1/config/settings_live.py examples/proj1/live_validate.py tests/test_live_validation_contract.py
+uv run --with pytest pytest tests/test_live_settings_contract.py -q
+uv run --only-dev ruff check examples/proj1/config/settings_live.py tests/test_live_settings_contract.py
 git diff --check
 ```
 
 Commit:
 
 ```powershell
-git add .gitignore examples/proj1/config/settings_live.py examples/proj1/live_validate.py examples/proj1/testapp/migrations tests/test_live_validation_contract.py
-git commit -m "test: add real Redshift validation runner"
+git add examples/proj1/config/settings_live.py tests/test_live_settings_contract.py
+git commit -m "test: add reusable live Redshift settings"
 ```
 
 ### Task 6: Operator Guide and Release Evidence Template
@@ -387,8 +361,11 @@ git commit -m "test: add real Redshift validation runner"
 
 Document exact commands for prerequisites, Python CDK bootstrap, setting the
 three fixed environment variables, plain `cdk deploy`, exporting the non-secret
-stack outputs, running `live_validate.py`, plain `cdk destroy`, and read-only
-cleanup verification. The password handoff must use this PowerShell shape:
+stack outputs, examples of freely selected Django or SQL probes, plain
+`cdk destroy`, and read-only cleanup verification. Do not prescribe a
+repository-owned validation command; show how a selected Django command uses
+`--settings=config.settings_live`. The
+password handoff must use this PowerShell shape:
 
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
@@ -411,7 +388,7 @@ Include failure paths for changed public IP, VPC Block Public Access, interrupte
 
 - [ ] **Step 2: Add the manual release checklist**
 
-The template must record commit SHA, UTC timestamp, operator, AWS account suffix only, Region, Django version, driver version, sanitized endpoint, migration result, `sqlmigrate` result, CRUD result, destroy result, and confirmation that namespace, workgroup, and snapshots are absent. It must warn against pasting passwords, access keys, tokens, or full AWS account IDs.
+The template must record commit SHA, UTC timestamp, operator, AWS account suffix only, Region, Django version, driver version, sanitized endpoint, the exact validation commands or probes selected for the session, their outcomes, cleanup performed, destroy result, and confirmation that namespace, workgroup, and snapshots are absent. It must warn against pasting passwords, access keys, tokens, or full AWS account IDs.
 
 - [ ] **Step 3: Close the parent-design deferral**
 
@@ -449,7 +426,7 @@ Use `actions/checkout@v6` and `astral-sh/setup-uv@v7` with Python 3.12. Run exac
 - run: uv sync --project examples/cdk --locked --all-groups
 - run: uv run --project examples/cdk pytest examples/cdk/tests -q
 - run: uv run --project examples/cdk ruff check examples/cdk
-- run: uv run --with pytest pytest tests/test_live_validation_contract.py -q
+- run: uv run --with pytest pytest tests/test_live_settings_contract.py -q
 ```
 
 Do not add AWS credentials, OIDC permissions, environment secrets, deploy, or destroy steps.
@@ -462,7 +439,7 @@ Run:
 uv sync --project examples/cdk --locked --all-groups
 uv run --project examples/cdk pytest examples/cdk/tests -q
 uv run --project examples/cdk ruff check examples/cdk
-uv run --with pytest pytest tests/test_live_validation_contract.py -q
+uv run --with pytest pytest tests/test_live_settings_contract.py -q
 uv run --only-dev tox -v
 uv build
 uv run --only-dev twine check dist/*
