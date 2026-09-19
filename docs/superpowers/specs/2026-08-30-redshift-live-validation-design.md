@@ -64,7 +64,7 @@ The CDK source must reject a non-single-host CIDR and must never default to
 `0.0.0.0/0`.
 
 The Python CDK application reads the required admin password from the fixed
-`REDSHIFT_LIVE_PASSWORD` process environment variable and passes it to the
+`DB_PASSWORD` process environment variable and passes it to the
 namespace as `AdminUserPassword`; it does not use CDK context, a CloudFormation
 parameter, or Secrets Manager. The same shell value is passed to the Django
 validation process. The stack outputs only endpoint address, port, database
@@ -106,7 +106,7 @@ workgroup leaves storage-bearing namespace resources behind.
 ## Live Validation Contract
 
 The validation runner receives standard Django database settings through
-environment variables: `NAME`, `HOST`, `PORT`, `USER`, and `PASSWORD`. A
+environment variables: `NAME`, `HOST`, `PORT`, `USER`, and `DB_PASSWORD`. A
 dedicated validation settings module maps those variables directly into
 `DATABASES["default"]` with `ENGINE=django_redshift_backend` and TLS enabled;
 it does not rely on `examples/proj1`'s development `DATABASE_URL` convention or
