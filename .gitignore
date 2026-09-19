@@ -15,4 +15,6 @@ coverage.xml
 examples/**/migrations/*
 .idea/
 uv.lock
+!examples/cdk/uv.lock
+examples/cdk/cdk.out/
 Pipfile
