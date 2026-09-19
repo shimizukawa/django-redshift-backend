@@ -44,7 +44,7 @@ The CDK application is a Python project managed with `uv`. Its `cdk.json`
 defines the Python app command, so the operator runs plain `cdk deploy` from
 `examples/cdk/`. It defines one CloudFormation stack using CDK's standard
 AWS account and Region environment plus fixed process environment variables
-for the temporary password, owner, and expiration date. It creates:
+for the temporary password and expiration date. It creates:
 
 1. A dedicated VPC with an internet gateway and three public subnets in
    distinct Availability Zones. It has no NAT gateway and no private workload
@@ -141,8 +141,8 @@ cleanup must remain visible, and the operator must still run and verify
   expected and remains protected by the single-host security-group rule.
 - The workgroup has both a maximum capacity and a daily RPU-hour cutoff that
   disables user queries.
-- Every resource has `Purpose=django-redshift-backend-live-validation`, plus
-  owner and expiration tags supplied by the operator.
+- Every resource has `Purpose=django-redshift-backend-live-validation` and an
+  expiration tag supplied by the operator.
 - Each public subnet has enough free addresses for the Serverless workgroup;
   synthesis tests pin the subnet topology and address ranges.
 - The README documents that `cdk destroy` must run after every session, how to
