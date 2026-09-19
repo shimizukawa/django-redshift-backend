@@ -364,13 +364,15 @@ driver or Redshift SQL works. It may be retained temporarily only where it tests
 driver-independent ORM behavior, and is removed when equivalent contract tests
 exist.
 
-### Deferred integration testing
+### Release-gated integration testing
 
-Real-Redshift tests remain skipped and clearly marked. A future issue will cover
-AWS account setup, secretless GitHub authentication, cost controls, test
-isolation, scheduled or release-gated execution, and the design and validation
-of IAM, Serverless, and identity-provider authentication. Initial release notes
-must state that the first redesigned release supports username/password only.
+Ordinary CI remains AWS-free and real-Redshift tests remain skipped there. The
+disposable, human-operated Redshift Serverless environment defined in
+`docs/superpowers/specs/2026-08-30-redshift-live-validation-design.md` is the
+6.0.0 real-integration release gate. A successful live run is still pending and
+must not be inferred from AWS-free synthesis tests. IAM, scheduled CI, and
+identity-provider authentication remain deferred. Initial release notes must
+state that the first redesigned release supports username/password only.
 
 ## Error handling
 
@@ -406,6 +408,8 @@ same-repository stacked pull request requirement is satisfied. The stack is:
 7. `redesign/06-activate-cleanup-release`: activate the new entry point, remove
    vendored Django and psycopg2, update the test matrix and documentation, and
    prepare the major release.
+8. `redesign/07-live-validation`: define the disposable Redshift Serverless
+   environment, AWS-free infrastructure contracts, and manual release gate.
 
 Each branch is based on the branch immediately below it. Every pull request must
 pass CI and contain a focused diff. Changes committed to a lower branch require
@@ -444,5 +448,5 @@ The redesign is complete when:
   removed.
 - Documentation states all breaking changes and that the initial redesigned
   release supports username/password authentication only.
-- Deferred real-Redshift integration and alternate-authentication work is
-  recorded in follow-up issues.
+- A human has completed and recorded the real-Redshift release gate; alternate
+  authentication work remains recorded as deferred follow-up work.
