@@ -42,7 +42,7 @@ it never creates AWS resources from ordinary CI or from an application test.
 
 The CDK application is a Python project managed with `uv`. Its `cdk.json`
 defines the Python app command, so the operator runs plain `cdk deploy` from
-`live_validation/`. It defines one CloudFormation stack using CDK's standard
+`examples/cdk/`. It defines one CloudFormation stack using CDK's standard
 AWS account and Region environment plus fixed process environment variables
 for the temporary password, owner, and expiration date. It creates:
 
@@ -72,7 +72,7 @@ name, admin username, workgroup name, namespace name, and the accepted CIDR. It
 never outputs the password.
 
 Because a synth-time environment value appears in the local synthesized
-CloudFormation assembly, `live_validation/cdk.out/` is ignored and treated as
+CloudFormation assembly, `examples/cdk/cdk.out/` is ignored and treated as
 sensitive temporary data. The operator removes it and clears the environment
 variable after every session. The password must never be committed, included
 in a PR artifact, or copied into a command-line argument.
@@ -91,7 +91,7 @@ The documented operator flow is:
 
 1. Configure AWS credentials and bootstrap the target account/Region once.
 2. Set the documented fixed environment variables and run `cdk deploy` from
-   `live_validation/`; `cdk.json` selects the Python application, which resolves
+   `examples/cdk/`; `cdk.json` selects the Python application, which resolves
    the current IP and deploys through normal CDK behavior.
 3. Export non-secret connection settings from stack outputs and pass the same
    local password environment value to the Django validation process.
