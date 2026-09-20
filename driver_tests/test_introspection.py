@@ -36,10 +36,11 @@ def test_table_list_queries_redshift_catalog_and_preserves_comments():
 
 def test_column_description_maps_identity_and_nullability():
     cursor = mock.Mock()
+    cursor.fetchone.return_value = ("analytics",)
     cursor.get_columns.return_value = (
         (
             "dev",
-            "public",
+            "analytics",
             "orders",
             "id",
             4,
@@ -69,6 +70,11 @@ def test_column_description_maps_identity_and_nullability():
             None,
         ),
     )
+    analytics_column = cursor.get_columns.return_value[0]
+    cursor.get_columns.return_value = (
+        (analytics_column[0], "public", *analytics_column[2:]),
+        analytics_column,
+    )
 
     columns = DatabaseIntrospection(mock.Mock()).get_table_description(cursor, "orders")
 
@@ -87,22 +93,26 @@ def test_column_description_maps_identity_and_nullability():
             "primary key",
         )
     ]
-    cursor.get_columns.assert_called_once_with(tablename_pattern="orders")
+    cursor.get_columns.assert_called_once_with(
+        schema_pattern="analytics", tablename_pattern="orders"
+    )
+    cursor.execute.assert_called_once_with("SELECT current_schema()")
 
 
 def test_constraints_group_primary_foreign_and_unique_metadata():
     cursor = mock.Mock()
+    cursor.fetchone.return_value = ("analytics",)
     cursor.get_primary_keys.return_value = (
-        ("dev", "public", "orders", "id", 1, "orders_pkey"),
+        ("dev", "analytics", "orders", "id", 1, "orders_pkey"),
     )
     cursor.get_imported_keys.return_value = (
         (
             "dev",
-            "public",
+            "analytics",
             "customer",
             "id",
             "dev",
-            "public",
+            "analytics",
             "orders",
             "customer_id",
             1,
@@ -121,20 +131,25 @@ def test_constraints_group_primary_foreign_and_unique_metadata():
     assert constraints["orders_pkey"]["columns"] == ["id"]
     assert constraints["orders_customer_fk"]["foreign_key"] == ("customer", "id")
     assert constraints["orders_code_key"]["unique"] is True
-    cursor.get_primary_keys.assert_called_once_with(table="orders")
-    cursor.get_imported_keys.assert_called_once_with(table="orders")
+    cursor.get_primary_keys.assert_called_once_with(schema="analytics", table="orders")
+    cursor.get_imported_keys.assert_called_once_with(schema="analytics", table="orders")
+    assert cursor.execute.call_args_list[0].args == ("SELECT current_schema()",)
+    unique_sql, unique_params = cursor.execute.call_args_list[-1].args
+    assert "tc.constraint_schema = %s" in " ".join(unique_sql.split())
+    assert unique_params == ["analytics", "orders"]
 
 
 def test_relations_include_no_on_delete_value_on_modern_django():
     cursor = mock.Mock()
+    cursor.fetchone.return_value = ("analytics",)
     cursor.get_imported_keys.return_value = (
         (
             "dev",
-            "public",
+            "analytics",
             "customer",
             "id",
             "dev",
-            "public",
+            "analytics",
             "orders",
             "customer_id",
             1,
@@ -149,6 +164,8 @@ def test_relations_include_no_on_delete_value_on_modern_django():
     relations = DatabaseIntrospection(mock.Mock()).get_relations(cursor, "orders")
 
     assert relations == {"customer_id": ("id", "customer", None)}
+    cursor.get_imported_keys.assert_called_once_with(schema="analytics", table="orders")
+    cursor.execute.assert_called_once_with("SELECT current_schema()")
 
 
 def test_django42_selector_uses_removable_relation_adapter():

@@ -58,6 +58,11 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
                 return "SmallAutoField"
         return field_type
 
+    @staticmethod
+    def _current_schema(cursor):
+        cursor.execute("SELECT current_schema()")
+        return cursor.fetchone()[0]
+
     def get_table_list(self, cursor):
         cursor.execute(
             """
@@ -75,6 +80,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         ]
 
     def get_table_description(self, cursor, table_name):
+        schema = self._current_schema(cursor)
         return [
             FieldInfo(
                 row[3],
@@ -89,7 +95,10 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
                 row[22] == "YES",
                 row[11],
             )
-            for row in cursor.get_columns(tablename_pattern=table_name)
+            for row in cursor.get_columns(
+                schema_pattern=schema, tablename_pattern=table_name
+            )
+            if row[1] == schema and row[2] == table_name
         ]
 
     @staticmethod
@@ -105,7 +114,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             "options": None,
         }
 
-    def _primary_key_constraints(self, cursor, table_name):
+    def _primary_key_constraints(self, cursor, schema, table_name):
         constraints = {}
         for (
             _catalog,
@@ -114,7 +123,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             column,
             position,
             name,
-        ) in cursor.get_primary_keys(table=table_name):
+        ) in cursor.get_primary_keys(schema=schema, table=table_name):
             constraints.setdefault(name, []).append((position, column))
         return {
             name: self._constraint(
@@ -125,12 +134,12 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             for name, columns in constraints.items()
         }
 
-    def _foreign_key_rows(self, cursor, table_name):
-        return cursor.get_imported_keys(table=table_name)
+    def _foreign_key_rows(self, cursor, schema, table_name):
+        return cursor.get_imported_keys(schema=schema, table=table_name)
 
-    def _foreign_key_constraints(self, cursor, table_name):
+    def _foreign_key_constraints(self, cursor, schema, table_name):
         constraints = {}
-        for row in self._foreign_key_rows(cursor, table_name):
+        for row in self._foreign_key_rows(cursor, schema, table_name):
             target_table, target_column = row[2], row[3]
             column, position, name = row[7], row[8], row[11]
             constraints.setdefault(name, []).append(
@@ -144,7 +153,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             for name, columns in constraints.items()
         }
 
-    def _unique_constraints(self, cursor, table_name):
+    def _unique_constraints(self, cursor, schema, table_name):
         cursor.execute(
             """
             SELECT tc.constraint_name, kcu.column_name, kcu.ordinal_position
@@ -153,10 +162,13 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
               ON tc.constraint_catalog = kcu.constraint_catalog
              AND tc.constraint_schema = kcu.constraint_schema
              AND tc.constraint_name = kcu.constraint_name
-            WHERE tc.table_name = %s AND tc.constraint_type = 'UNIQUE'
+             AND tc.table_name = kcu.table_name
+            WHERE tc.constraint_schema = %s
+              AND tc.table_name = %s
+              AND tc.constraint_type = 'UNIQUE'
             ORDER BY tc.constraint_name, kcu.ordinal_position
             """,
-            [table_name],
+            [schema, table_name],
         )
         constraints = {}
         for name, column, position in cursor.fetchall():
@@ -169,15 +181,17 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         }
 
     def get_constraints(self, cursor, table_name):
-        constraints = self._primary_key_constraints(cursor, table_name)
-        constraints.update(self._foreign_key_constraints(cursor, table_name))
-        constraints.update(self._unique_constraints(cursor, table_name))
+        schema = self._current_schema(cursor)
+        constraints = self._primary_key_constraints(cursor, schema, table_name)
+        constraints.update(self._foreign_key_constraints(cursor, schema, table_name))
+        constraints.update(self._unique_constraints(cursor, schema, table_name))
         return constraints
 
     def get_relations(self, cursor, table_name):
+        schema = self._current_schema(cursor)
         return {
             row[7]: (row[3], row[2], None)
-            for row in self._foreign_key_rows(cursor, table_name)
+            for row in self._foreign_key_rows(cursor, schema, table_name)
         }
 
     def get_sequences(self, cursor, table_name, table_fields=()):
