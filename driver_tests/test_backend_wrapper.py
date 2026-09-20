@@ -105,12 +105,12 @@ def test_wrapper_compiles_exact_lookup_through_django_orm():
 @pytest.mark.parametrize(
     ("lookup", "expected"),
     [
-        ("contains", "LIKE '%%' ||"),
-        ("icontains", "LIKE '%%' || UPPER("),
+        ("contains", "LIKE '%' ||"),
+        ("icontains", "LIKE '%' || UPPER("),
         ("startswith", "LIKE"),
         ("istartswith", "LIKE UPPER("),
-        ("endswith", "LIKE '%%' ||"),
-        ("iendswith", "LIKE '%%' || UPPER("),
+        ("endswith", "LIKE '%' ||"),
+        ("iendswith", "LIKE '%' || UPPER("),
     ],
 )
 def test_wrapper_compiles_expression_pattern_lookups(lookup, expected):
@@ -122,6 +122,8 @@ def test_wrapper_compiles_expression_pattern_lookups(lookup, expected):
     sql, params = compiler.as_sql()
 
     assert expected in sql
+    assert "CHR(92)" in sql
+    assert "E'" not in sql
     assert params == ()
 
 
