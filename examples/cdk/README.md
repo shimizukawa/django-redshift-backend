@@ -9,6 +9,9 @@ of ordinary CI. The human operator owns both `cdk deploy` and `cdk destroy`.
 - AWS CLI v2 authenticated to the intended personal AWS account.
 - AWS CDK CLI v2 and Node.js installed.
 - `uv` and Python 3.12 or later.
+- A temporary `DB_PASSWORD` value set before any CDK command, including
+  `cdk bootstrap`, because the CDK CLI evaluates this application to determine
+  its target environment.
 - A Region supported by this app's 4-RPU allowlist.
 - VPC Block Public Access configured to permit a public workgroup in the
   dedicated VPC.
@@ -20,6 +23,7 @@ Confirm the target before creating anything:
 ```powershell
 aws sts get-caller-identity
 aws configure get region
+$env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
 Push-Location examples/cdk
 uv sync --locked --all-groups
 cdk bootstrap
@@ -31,7 +35,8 @@ S3, ECR, and IAM resources and is not removed with this validation stack.
 
 ## Deploy
 
-Choose a temporary password that satisfies Redshift's password rules:
+Use the same temporary password set before bootstrap. If this is a new shell,
+set it again before deployment:
 
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'

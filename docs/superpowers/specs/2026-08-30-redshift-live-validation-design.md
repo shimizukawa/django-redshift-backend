@@ -93,8 +93,12 @@ never weakens account policy automatically.
 
 The documented operator flow is:
 
-1. Configure AWS credentials and bootstrap the target account/Region once.
-2. Set the documented password environment variable and run `cdk deploy` from
+1. Configure AWS credentials, set the documented `DB_PASSWORD` environment
+   variable, and bootstrap the target account/Region once. Plain
+   `cdk bootstrap` evaluates the application to discover its environment, so
+   the password must already be present even though the bootstrap stack does
+   not consume it.
+2. With the same password value, run `cdk deploy` from
    `examples/cdk/`; `cdk.json` selects the Python application, which resolves
    the current IP and deploys through normal CDK behavior.
 3. Export non-secret connection settings from stack outputs and pass the same
