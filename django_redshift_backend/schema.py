@@ -482,6 +482,23 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             old_type,
             new_type,
         )
+        add_unique_constraint = (
+            old_field.column == new_field.column
+            and old_type == new_type
+            and old_field.null == new_field.null
+            and not old_field.unique
+            and new_field.unique
+            and old_field.primary_key == new_field.primary_key
+            and self._has_db_default(old_field) == self._has_db_default(new_field)
+            and (
+                not self._has_db_default(old_field)
+                or old_field.db_default == new_field.db_default
+            )
+            and self._relation_signature(old_field)
+            == self._relation_signature(new_field)
+            and getattr(old_field, "db_constraint", None)
+            == getattr(new_field, "db_constraint", None)
+        )
         physical_change = (
             old_type != new_type
             or old_field.null != new_field.null
@@ -500,7 +517,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 != self._relation_signature(new_field)
             )
         )
-        if physical_change and not direct_varchar_change:
+        if physical_change and not direct_varchar_change and not add_unique_constraint:
             self._validate_recreation(model, old_field, new_field)
         if old_field.column != new_field.column:
             self.execute(
@@ -520,6 +537,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                     )
             old_field = copy.copy(old_field)
             old_field.column = new_field.column
+        if add_unique_constraint:
+            self.execute(self._create_unique_sql(model, [new_field]))
+            return
         if direct_varchar_change:
             unique_constraint_name = None
             if old_field.unique:
@@ -583,6 +603,12 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 % {"table": self.quote_name(model._meta.db_table)}
             )
             return super().remove_field(model, field)
+
+    def execute(self, sql, params=()):
+        if not self.collect_sql and params:
+            sql = str(sql) % tuple(map(self.quote_value, params))
+            params = None
+        return super().execute(sql, params)
 
     def create_model(self, model):
         self._validate_model_ddl(model)

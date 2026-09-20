@@ -219,6 +219,28 @@ def test_nonnull_unique_varchar_enlargement_uses_introspected_constraint_name():
 
 
 @isolate_apps("driver_tests")
+def test_adding_unique_to_nonnull_field_only_adds_constraint():
+    class Pony(models.Model):
+        code = models.CharField(max_length=5)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    sql = alter_sql(
+        Pony,
+        models.CharField(max_length=5),
+        models.CharField(max_length=5, unique=True),
+        name="code",
+    )
+
+    assert len(sql) == 1
+    assert sql[0].startswith(
+        'ALTER TABLE "driver_tests_pony" ADD CONSTRAINT '
+    )
+    assert sql[0].endswith(' UNIQUE ("code");')
+
+
+@isolate_apps("driver_tests")
 def test_primary_key_varchar_enlargement_recreates_and_rebuilds_primary_key():
     class Pony(models.Model):
         code = models.CharField(max_length=10, primary_key=True, default="")
