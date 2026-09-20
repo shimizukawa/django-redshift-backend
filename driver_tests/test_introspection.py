@@ -15,11 +15,11 @@ def test_internal_backend_registers_redshift_introspection():
     )
 
 
-def test_table_list_uses_driver_metadata_and_preserves_comments():
+def test_table_list_queries_redshift_catalog_and_preserves_comments():
     cursor = mock.Mock()
-    cursor.get_tables.return_value = (
-        ("dev", "public", "orders", "TABLE", "order facts"),
-        ("dev", "public", "order_summary", "VIEW", "summary"),
+    cursor.fetchall.return_value = (
+        ("orders", "BASE TABLE", "order facts"),
+        ("order_summary", "VIEW", "summary"),
     )
 
     tables = DatabaseIntrospection(mock.Mock()).get_table_list(cursor)
@@ -28,7 +28,10 @@ def test_table_list_uses_driver_metadata_and_preserves_comments():
         TableInfo("orders", "t", "order facts"),
         TableInfo("order_summary", "v", "summary"),
     ]
-    cursor.get_tables.assert_called_once_with(types=["TABLE", "VIEW"])
+    sql = " ".join(cursor.execute.call_args.args[0].split())
+    assert "FROM svv_tables" in sql
+    assert "table_schema = current_schema()" in sql
+    assert "table_type IN ('BASE TABLE', 'VIEW')" in sql
 
 
 def test_column_description_maps_identity_and_nullability():
