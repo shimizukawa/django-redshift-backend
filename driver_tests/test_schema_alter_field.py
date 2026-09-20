@@ -741,6 +741,51 @@ def test_incoming_fk_varchar_enlargement_recreates_referenced_column():
     assert any('FOREIGN KEY ("customer_id")' in statement for statement in sql[4:])
 
 
+def test_incoming_many_to_many_does_not_block_varchar_enlargement():
+    def state_for(max_length):
+        state = ProjectState()
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Permission",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("name", models.CharField(max_length=max_length)),
+                ],
+            )
+        )
+        state.add_model(
+            ModelState(
+                "driver_tests",
+                "Group",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    (
+                        "permissions",
+                        models.ManyToManyField("driver_tests.Permission"),
+                    ),
+                ],
+            )
+        )
+        return state
+
+    from_model = model_from_state(state_for(10), "Permission")
+    to_model = model_from_state(state_for(20), "Permission")
+
+    sql = collect_schema_sql(
+        lambda editor: editor.alter_field(
+            from_model,
+            from_model._meta.get_field("name"),
+            to_model._meta.get_field("name"),
+        )
+    )
+
+    assert sql == [
+        'ALTER TABLE "driver_tests_permission" '
+        'ALTER COLUMN "name" TYPE varchar(20);'
+    ]
+
+
 @isolate_apps("driver_tests")
 def test_remove_sortkey_column_retries_only_known_redshift_error(monkeypatch):
     class Pony(models.Model):
