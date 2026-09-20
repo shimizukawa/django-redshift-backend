@@ -25,6 +25,22 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     data_types = {}
     data_types_suffix = {}
     data_type_check_constraints = {}
+    operators = {
+        "exact": "= %s",
+        "iexact": "= UPPER(%s)",
+        "contains": "LIKE %s",
+        "icontains": "LIKE UPPER(%s)",
+        "regex": "~ %s",
+        "iregex": "~* %s",
+        "gt": "> %s",
+        "gte": ">= %s",
+        "lt": "< %s",
+        "lte": "<= %s",
+        "startswith": "LIKE %s",
+        "endswith": "LIKE %s",
+        "istartswith": "LIKE UPPER(%s)",
+        "iendswith": "LIKE UPPER(%s)",
+    }
 
     def get_connection_params(self):
         return driver.build_connect_kwargs(self.settings_dict)
