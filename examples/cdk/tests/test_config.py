@@ -51,3 +51,37 @@ def test_environment_rejects_missing_required_value(name):
 
     with pytest.raises(ValueError, match=name):
         ValidationConfig.from_environment(environ, allowed_cidr="8.8.8.8/32")
+
+
+@pytest.mark.parametrize(
+    "password",
+    [
+        "testredshift",
+        "Short1",
+        f"ValidPassword1{'x' * 51}",
+        "UPPERCASE1",
+        "lowercase1",
+        "NoDigitsHere",
+        "Invalid1'Password",
+        'Invalid1"Password',
+        r"Invalid1\Password",
+        "Invalid1/Password",
+        "Invalid1@Password",
+        "Invalid1 Password",
+        " Valid1Password",
+        "Invalid1\nPassword",
+        "Invalid1Passwordあ",
+    ],
+)
+def test_environment_rejects_passwords_redshift_will_reject(password):
+    environ = {
+        "DB_PASSWORD": password,
+        "CDK_DEFAULT_ACCOUNT": "123456789012",
+        "CDK_DEFAULT_REGION": "ap-northeast-1",
+    }
+
+    with pytest.raises(ValueError) as raised:
+        ValidationConfig.from_environment(environ, allowed_cidr="8.8.8.8/32")
+
+    assert "DB_PASSWORD" in str(raised.value)
+    assert password not in str(raised.value)

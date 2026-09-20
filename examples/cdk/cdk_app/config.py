@@ -24,6 +24,27 @@ def _required(environ: Mapping[str, str], name: str) -> str:
     return value
 
 
+def validate_db_password(value: str) -> str:
+    forbidden = {"'", '"', "\\", "/", "@"}
+    valid = (
+        8 <= len(value) <= 64
+        and any("A" <= character <= "Z" for character in value)
+        and any("a" <= character <= "z" for character in value)
+        and any("0" <= character <= "9" for character in value)
+        and all(
+            33 <= ord(character) <= 126 and character not in forbidden
+            for character in value
+        )
+    )
+    if not valid:
+        raise ValueError(
+            "DB_PASSWORD must be 8-64 printable ASCII characters, include an "
+            "uppercase letter, a lowercase letter, and a number, and must not "
+            "contain single quotes, double quotes, backslashes, slashes, or @"
+        )
+    return value
+
+
 @dataclass(frozen=True)
 class ValidationConfig:
     password: str
@@ -42,8 +63,11 @@ class ValidationConfig:
         *,
         allowed_cidr: str,
     ) -> ValidationConfig:
+        password = environ.get("DB_PASSWORD", "")
+        if not password:
+            raise ValueError("DB_PASSWORD is required")
         return cls(
-            password=_required(environ, "DB_PASSWORD"),
+            password=validate_db_password(password),
             account=_required(environ, "CDK_DEFAULT_ACCOUNT"),
             region=_required(environ, "CDK_DEFAULT_REGION"),
             allowed_cidr=validate_allowed_cidr(allowed_cidr),
