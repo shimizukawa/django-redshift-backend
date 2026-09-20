@@ -11,7 +11,9 @@ of ordinary CI. The human operator owns both `cdk deploy` and `cdk destroy`.
 - `uv` and Python 3.12 or later.
 - A temporary `DB_PASSWORD` value set before any CDK command, including
   `cdk bootstrap`, because the CDK CLI evaluates this application to determine
-  its target environment.
+  its target environment. It must be 8-64 printable ASCII characters, include
+  at least one uppercase letter, one lowercase letter, and one number, and must
+  not contain single quotes, double quotes, backslashes, slashes, or `@`.
 - A Region supported by this app's 4-RPU allowlist.
 - VPC Block Public Access configured to permit a public workgroup in the
   dedicated VPC.
