@@ -16,5 +16,6 @@ examples/**/migrations/*
 .idea/
 uv.lock
 !examples/cdk/uv.lock
+!examples/proj1/uv.lock
 examples/cdk/cdk.out/
 Pipfile
