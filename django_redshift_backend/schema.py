@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.ddl_references import Statement
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import NOT_PROVIDED, UniqueConstraint, Value
+from django.db.models import NOT_PROVIDED, ForeignKey, UniqueConstraint, Value
 from django.db.utils import NotSupportedError, ProgrammingError
 
 from .meta import DistKey, SortKey
@@ -282,7 +282,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
     def _has_constrained_incoming_fk(self, model, field):
         return any(
-            relation.field.db_constraint
+            isinstance(relation.field, ForeignKey)
+            and relation.field.db_constraint
             and relation.field.target_field.column == field.column
             for relation in model._meta.related_objects
         )
