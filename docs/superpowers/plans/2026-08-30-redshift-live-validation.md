@@ -318,8 +318,8 @@ Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after stagin
 
 - [x] **Step 1: Write the runbook**
 
-Document exact commands for prerequisites, Python CDK bootstrap, setting the
-the fixed password environment variable, plain `cdk deploy`, exporting the non-secret
+Document exact commands for prerequisites, setting the fixed password
+environment variable before Python CDK bootstrap, plain `cdk deploy`, exporting the non-secret
 stack outputs, examples of freely selected Django or SQL probes, plain
 `cdk destroy`, and read-only cleanup verification. Do not prescribe a
 repository-owned validation command; show how to URL-escape `DB_PASSWORD`, set
@@ -332,6 +332,7 @@ password handoff must use this PowerShell shape:
 ```powershell
 $env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
 Push-Location examples/cdk
+cdk bootstrap
 cdk deploy
 Pop-Location
 ```
