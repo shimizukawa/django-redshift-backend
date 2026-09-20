@@ -1,22 +1,16 @@
 from unittest.mock import patch
 
 import pytest
-from django.db import models
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.utils import NotSupportedError
+from django.db.models import IntegerField, Value
+from django.db.models.lookups import Exact
+from django.db.models.sql.compiler import SQLCompiler
 
 from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
 from django_redshift_backend.client import DatabaseClient
 from django_redshift_backend.creation import DatabaseCreation
-
-
-class LookupEvent(models.Model):
-    name = models.CharField(max_length=100)
-
-    class Meta:
-        app_label = "driver_contract"
-        managed = False
 
 
 class FakeCursor:
@@ -77,12 +71,16 @@ def test_wrapper_registers_foundation_components():
 
 def test_wrapper_compiles_exact_lookup_through_django_orm():
     wrapper = DatabaseWrapper(settings_dict(), "lookup-test")
-    query = LookupEvent.objects.filter(pk=1).query
+    compiler = SQLCompiler(None, wrapper, "lookup-test")
+    lookup = Exact(
+        Value(1, output_field=IntegerField()),
+        Value(1, output_field=IntegerField()),
+    )
 
-    sql, params = query.get_compiler(connection=wrapper).as_sql()
+    sql, params = compiler.compile(lookup)
 
-    assert 'WHERE "driver_contract_lookupevent"."id" = %s' in sql
-    assert params == (1,)
+    assert sql == "%s = %s"
+    assert params == [1, 1]
 
 
 def test_connection_params_use_password_contract():
