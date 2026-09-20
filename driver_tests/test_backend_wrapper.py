@@ -80,7 +80,7 @@ def test_wrapper_compiles_exact_lookup_through_django_orm():
     sql, params = compiler.compile(lookup)
 
     assert sql == "%s = %s"
-    assert params == [1, 1]
+    assert tuple(params) == (1, 1)
 
 
 def test_connection_params_use_password_contract():
