@@ -52,13 +52,21 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def get_db_converters(self, expression):
         converters = super().get_db_converters(expression)
-        if expression.output_field.get_internal_type() == "UUIDField":
+        internal_type = expression.output_field.get_internal_type()
+        if internal_type == "UUIDField":
             converters.append(self.convert_uuidfield_value)
+        elif internal_type == "BinaryField":
+            converters.append(self.convert_binaryfield_value)
         return converters
 
     def convert_uuidfield_value(self, value, expression, connection):
         if value is not None and not isinstance(value, uuid.UUID):
             value = uuid.UUID(value)
+        return value
+
+    def convert_binaryfield_value(self, value, expression, connection):
+        if isinstance(value, str):
+            return bytes.fromhex(value)
         return value
 
     def adapt_integerfield_value(self, value, internal_type):

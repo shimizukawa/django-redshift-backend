@@ -117,6 +117,26 @@ def test_uuid_converter_accepts_text_uuid_and_none():
     assert ops.convert_uuidfield_value(None, expression, ops.connection) is None
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("8000ff", b"\x80\x00\xff"),
+        (b"\x80\x00\xff", b"\x80\x00\xff"),
+        (None, None),
+    ],
+)
+def test_binary_converter_returns_bytes(value, expected):
+    ops = operations()
+    expression = SimpleNamespace(
+        output_field=SimpleNamespace(get_internal_type=lambda: "BinaryField")
+    )
+
+    converters = ops.get_db_converters(expression)
+
+    assert ops.convert_binaryfield_value in converters
+    assert ops.convert_binaryfield_value(value, expression, ops.connection) == expected
+
+
 def test_non_uuid_expression_has_no_redshift_converter():
     expression = SimpleNamespace(output_field=IntegerField())
     assert operations().get_db_converters(expression) == []
