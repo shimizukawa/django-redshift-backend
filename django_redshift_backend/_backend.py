@@ -109,15 +109,16 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         "iendswith": "LIKE UPPER(%s)",
     }
     pattern_esc = (
-        r"REPLACE(REPLACE(REPLACE({}, E'\\', E'\\\\'), E'%%', E'\\%%'), E'_', E'\\_')"
+        "REPLACE(REPLACE(REPLACE({}, CHR(92), CHR(92) || CHR(92)), "
+        "'%', CHR(92) || '%'), '_', CHR(92) || '_')"
     )
     pattern_ops = {
-        "contains": "LIKE '%%' || {} || '%%'",
-        "icontains": "LIKE '%%' || UPPER({}) || '%%'",
-        "startswith": "LIKE {} || '%%'",
-        "istartswith": "LIKE UPPER({}) || '%%'",
-        "endswith": "LIKE '%%' || {}",
-        "iendswith": "LIKE '%%' || UPPER({})",
+        "contains": "LIKE '%' || {} || '%'",
+        "icontains": "LIKE '%' || UPPER({}) || '%'",
+        "startswith": "LIKE {} || '%'",
+        "istartswith": "LIKE UPPER({}) || '%'",
+        "endswith": "LIKE '%' || {}",
+        "iendswith": "LIKE '%' || UPPER({})",
     }
 
     def get_connection_params(self):
