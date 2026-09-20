@@ -164,15 +164,11 @@ def test_nullable_unique_varchar_enlargement_temporarily_drops_constraint():
     )
 
     assert len(sql) == 3
-    assert sql[0].startswith(
-        'ALTER TABLE "driver_tests_pony" DROP CONSTRAINT '
-    )
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" DROP CONSTRAINT ')
     assert sql[1] == (
         'ALTER TABLE "driver_tests_pony" ALTER COLUMN "code" TYPE varchar(20);'
     )
-    assert sql[2].startswith(
-        'ALTER TABLE "driver_tests_pony" ADD CONSTRAINT '
-    )
+    assert sql[2].startswith('ALTER TABLE "driver_tests_pony" ADD CONSTRAINT ')
     assert sql[2].endswith(' UNIQUE ("code");')
 
 
@@ -184,22 +180,14 @@ def test_nonnull_unique_varchar_enlargement_uses_introspected_constraint_name():
         class Meta:
             app_label = "driver_tests"
 
-    old_field = _field_for(
-        Pony, models.CharField(max_length=10, unique=True), "code"
-    )
-    new_field = _field_for(
-        Pony, models.CharField(max_length=20, unique=True), "code"
-    )
+    old_field = _field_for(Pony, models.CharField(max_length=10, unique=True), "code")
+    new_field = _field_for(Pony, models.CharField(max_length=20, unique=True), "code")
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
     editor.deferred_sql = []
     editor.collect_sql = False
-    editor._constraint_names = lambda *args, **kwargs: [
-        "driver_tests_pony_code_key"
-    ]
+    editor._constraint_names = lambda *args, **kwargs: ["driver_tests_pony_code_key"]
     collected_sql = []
-    editor.execute = lambda statement, params=(): collected_sql.append(
-        f"{statement};"
-    )
+    editor.execute = lambda statement, params=(): collected_sql.append(f"{statement};")
 
     editor.alter_field(Pony, old_field, new_field)
     sql = [normalize_sql(statement) for statement in collected_sql]
@@ -234,9 +222,7 @@ def test_adding_unique_to_nonnull_field_only_adds_constraint():
     )
 
     assert len(sql) == 1
-    assert sql[0].startswith(
-        'ALTER TABLE "driver_tests_pony" ADD CONSTRAINT '
-    )
+    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD CONSTRAINT ')
     assert sql[0].endswith(' UNIQUE ("code");')
 
 
@@ -851,8 +837,7 @@ def test_incoming_many_to_many_does_not_block_varchar_enlargement():
     )
 
     assert sql == [
-        'ALTER TABLE "driver_tests_permission" '
-        'ALTER COLUMN "name" TYPE varchar(20);'
+        'ALTER TABLE "driver_tests_permission" ' 'ALTER COLUMN "name" TYPE varchar(20);'
     ]
 
 
