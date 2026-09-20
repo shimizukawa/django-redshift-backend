@@ -59,11 +59,19 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         return field_type
 
     def get_table_list(self, cursor):
-        table_types = {"TABLE": "t", "VIEW": "v"}
+        cursor.execute(
+            """
+            SELECT table_name, table_type, remarks
+            FROM svv_tables
+            WHERE table_schema = current_schema()
+              AND table_type IN ('BASE TABLE', 'VIEW')
+            ORDER BY table_name
+            """
+        )
+        table_types = {"BASE TABLE": "t", "VIEW": "v"}
         return [
-            TableInfo(row[2], table_types[row[3]], row[4])
-            for row in cursor.get_tables(types=["TABLE", "VIEW"])
-            if row[3] in table_types
+            TableInfo(name, table_types[table_type], comment)
+            for name, table_type, comment in cursor.fetchall()
         ]
 
     def get_table_description(self, cursor, table_name):
