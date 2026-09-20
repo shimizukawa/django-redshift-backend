@@ -108,6 +108,17 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         "istartswith": "LIKE UPPER(%s)",
         "iendswith": "LIKE UPPER(%s)",
     }
+    pattern_esc = (
+        r"REPLACE(REPLACE(REPLACE({}, E'\\', E'\\\\'), E'%%', E'\\%%'), E'_', E'\\_')"
+    )
+    pattern_ops = {
+        "contains": "LIKE '%%' || {} || '%%'",
+        "icontains": "LIKE '%%' || UPPER({}) || '%%'",
+        "startswith": "LIKE {} || '%%'",
+        "istartswith": "LIKE UPPER({}) || '%%'",
+        "endswith": "LIKE '%%' || {}",
+        "iendswith": "LIKE '%%' || UPPER({})",
+    }
 
     def get_connection_params(self):
         return driver.build_connect_kwargs(self.settings_dict)
