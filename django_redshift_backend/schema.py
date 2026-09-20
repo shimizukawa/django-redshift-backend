@@ -565,9 +565,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                             f"{len(unique_constraint_names)}."
                         )
                     unique_constraint_name = unique_constraint_names[0]
-                self.execute(
-                    self._delete_unique_sql(model, unique_constraint_name)
-                )
+                self.execute(self._delete_unique_sql(model, unique_constraint_name))
             if old_type != new_type:
                 self.execute(
                     self.sql_alter_column_type
