@@ -1,4 +1,4 @@
-from aws_cdk import CfnOutput, Fn, RemovalPolicy, Stack, Tags, Token
+from aws_cdk import CfnOutput, Fn, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_redshiftserverless as redshift
 from aws_cdk import custom_resources as cr
@@ -19,6 +19,7 @@ class LiveValidationStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         Tags.of(self).add("Purpose", "django-redshift-backend-live-validation")
+        port = 5439
 
         vpc = ec2.CfnVPC(
             self,
@@ -74,8 +75,8 @@ class LiveValidationStack(Stack):
             group_id=security_group.attr_group_id,
             cidr_ip=config.allowed_cidr,
             ip_protocol="tcp",
-            from_port=5439,
-            to_port=5439,
+            from_port=port,
+            to_port=port,
         )
         self.security_group_id = security_group.attr_group_id
 
@@ -96,7 +97,7 @@ class LiveValidationStack(Stack):
             namespace_name=namespace.ref,
             base_capacity=config.base_capacity,
             max_capacity=config.max_capacity,
-            port=5439,
+            port=port,
             publicly_accessible=True,
             security_group_ids=[self.security_group_id],
             subnet_ids=self.subnet_ids,
@@ -142,7 +143,7 @@ class LiveValidationStack(Stack):
             "AdminUsername": namespace.attr_namespace_admin_username,
             "DatabaseName": namespace.attr_namespace_db_name,
             "EndpointAddress": workgroup.attr_workgroup_endpoint_address,
-            "EndpointPort": Token.as_string(workgroup.attr_workgroup_endpoint_port),
+            "EndpointPort": str(port),
             "NamespaceName": namespace.ref,
             "WorkgroupName": workgroup.ref,
         }.items():

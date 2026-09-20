@@ -88,3 +88,4 @@ def test_outputs_are_complete_and_do_not_expose_password():
         for key in outputs
         for term in ("password", "secret", "token")
     )
+    assert outputs["EndpointPort"]["Value"] == "5439"
