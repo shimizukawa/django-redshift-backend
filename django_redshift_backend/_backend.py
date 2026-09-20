@@ -3,11 +3,25 @@ from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.backends.utils import CursorDebugWrapper, CursorWrapper
 from django.db.utils import NotSupportedError
 
 from . import driver
 from .client import DatabaseClient
 from .creation import DatabaseCreation
+
+
+class FetchmanyListMixin:
+    def fetchmany(self, size=None):
+        return list(self.cursor.fetchmany(size))
+
+
+class DatabaseCursorWrapper(FetchmanyListMixin, CursorWrapper):
+    pass
+
+
+class DatabaseCursorDebugWrapper(FetchmanyListMixin, CursorDebugWrapper):
+    pass
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):
@@ -55,6 +69,12 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         if name is not None:
             raise NotSupportedError("Amazon Redshift does not support named cursors.")
         return self.connection.cursor()
+
+    def make_cursor(self, cursor):
+        return DatabaseCursorWrapper(cursor, self)
+
+    def make_debug_cursor(self, cursor):
+        return DatabaseCursorDebugWrapper(cursor, self)
 
     def _set_autocommit(self, autocommit):
         self.connection.autocommit = autocommit
