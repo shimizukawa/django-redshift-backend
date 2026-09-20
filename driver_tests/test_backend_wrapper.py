@@ -3,9 +3,11 @@ from unittest.mock import patch
 import pytest
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.utils import NotSupportedError
-from django.db.models import IntegerField, Value
+from django.db import models
+from django.db.models import F, IntegerField, Q, Value
 from django.db.models.lookups import Exact
 from django.db.models.sql.compiler import SQLCompiler
+from django.db.models.sql.query import Query
 
 from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
@@ -13,6 +15,15 @@ from django_redshift_backend.client import DatabaseClient
 from django_redshift_backend.creation import DatabaseCreation
 from django_redshift_backend.features import DatabaseFeatures
 from django_redshift_backend.operations import DatabaseOperations
+
+
+class PatternModel(models.Model):
+    left = models.CharField(max_length=100)
+    right = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "driver_contract"
+        managed = False
 
 
 class FakeCursor:
@@ -89,6 +100,29 @@ def test_wrapper_compiles_exact_lookup_through_django_orm():
 
     assert sql in {"%s = %s", "%s = (%s)"}
     assert tuple(params) == (1, 1)
+
+
+@pytest.mark.parametrize(
+    ("lookup", "expected"),
+    [
+        ("contains", "LIKE '%%' ||"),
+        ("icontains", "LIKE '%%' || UPPER("),
+        ("startswith", "LIKE"),
+        ("istartswith", "LIKE UPPER("),
+        ("endswith", "LIKE '%%' ||"),
+        ("iendswith", "LIKE '%%' || UPPER("),
+    ],
+)
+def test_wrapper_compiles_expression_pattern_lookups(lookup, expected):
+    wrapper = DatabaseWrapper(settings_dict(), "pattern-lookup-test")
+    query = Query(PatternModel)
+    query.add_q(Q(**{f"left__{lookup}": F("right")}))
+    compiler = SQLCompiler(query, wrapper, "pattern-lookup-test")
+
+    sql, params = compiler.as_sql()
+
+    assert expected in sql
+    assert params == ()
 
 
 def test_connection_params_use_password_contract():
