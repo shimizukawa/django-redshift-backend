@@ -27,6 +27,20 @@ class VarcharContractModel(models.Model):
         app_label = "schema_contract"
 
 
+class RecordingCursor:
+    def __init__(self, calls):
+        self.calls = calls
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+
+
 def test_schema_editor_uses_installed_public_base_class():
     assert issubclass(DatabaseSchemaEditor, BaseDatabaseSchemaEditor)
 
@@ -104,6 +118,28 @@ def test_quote_value_supports_database_free_sql_collection():
     assert editor.quote_value(datetime(2026, 8, 25, 12, 30, 45)) == (
         "'2026-08-25T12:30:45'"
     )
+
+
+def test_execute_inlines_parameters_for_redshift_ddl(monkeypatch):
+    editor = make_wrapper().schema_editor(collect_sql=False, atomic=False)
+    calls = []
+    monkeypatch.setattr(
+        editor.connection,
+        "cursor",
+        lambda: RecordingCursor(calls),
+    )
+
+    editor.execute(
+        'ALTER TABLE "pony" ADD COLUMN "enabled" boolean DEFAULT %s NOT NULL',
+        [False],
+    )
+
+    assert calls == [
+        (
+            'ALTER TABLE "pony" ADD COLUMN "enabled" boolean DEFAULT FALSE NOT NULL',
+            None,
+        )
+    ]
 
 
 @override_settings(REDSHIFT_VARCHAR_LENGTH_MULTIPLIER=3)
