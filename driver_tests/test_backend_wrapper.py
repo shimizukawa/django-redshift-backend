@@ -14,9 +14,10 @@ from django_redshift_backend.creation import DatabaseCreation
 
 
 class FakeCursor:
-    def __init__(self, error=None):
+    def __init__(self, error=None, rows=()):
         self.error = error
         self.executed = []
+        self.rows = rows
 
     def __enter__(self):
         return self
@@ -28,6 +29,9 @@ class FakeCursor:
         if self.error:
             raise self.error
         self.executed.append(sql)
+
+    def fetchmany(self, size=None):
+        return tuple(self.rows[:size])
 
 
 class FakeConnection:
@@ -110,6 +114,14 @@ def test_create_cursor_rejects_named_cursor():
     assert wrapper.create_cursor() is wrapper.connection._cursor
     with pytest.raises(NotSupportedError, match="named cursor"):
         wrapper.create_cursor(name="server-side")
+
+
+@pytest.mark.parametrize("factory", ["make_cursor", "make_debug_cursor"])
+def test_cursor_fetchmany_returns_django_list_sentinel(factory):
+    wrapper = DatabaseWrapper(settings_dict(), "default")
+    cursor = getattr(wrapper, factory)(FakeCursor(rows=[]))
+
+    assert cursor.fetchmany(100) == []
 
 
 def test_autocommit_uses_public_driver_attribute():
