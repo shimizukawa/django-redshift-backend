@@ -305,8 +305,6 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             and old_field.null == new_field.null
             and old_field.unique == new_field.unique
             and old_field.primary_key == new_field.primary_key
-            and not old_field.unique
-            and not new_field.unique
             and not old_field.primary_key
             and not new_field.primary_key
             and not self._has_db_default(old_field)
@@ -523,6 +521,33 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             old_field = copy.copy(old_field)
             old_field.column = new_field.column
         if direct_varchar_change:
+            unique_constraint_name = None
+            if old_field.unique:
+                if self.collect_sql:
+                    unique_constraint_name = str(
+                        self._unique_constraint_name(
+                            model._meta.db_table,
+                            [old_field.column],
+                            quote=False,
+                        )
+                    )
+                else:
+                    unique_constraint_names = self._constraint_names(
+                        model,
+                        [old_field.column],
+                        unique=True,
+                        primary_key=False,
+                    )
+                    if len(unique_constraint_names) != 1:
+                        raise NotSupportedError(
+                            f"Expected one unique constraint for "
+                            f"{model._meta.label}.{old_field.name}; found "
+                            f"{len(unique_constraint_names)}."
+                        )
+                    unique_constraint_name = unique_constraint_names[0]
+                self.execute(
+                    self._delete_unique_sql(model, unique_constraint_name)
+                )
             if old_type != new_type:
                 self.execute(
                     self.sql_alter_column_type
@@ -531,6 +556,14 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                         "column": self.quote_name(new_field.column),
                         "type": self._multiply_bounded_varchar_lengths(new_type),
                     }
+                )
+            if unique_constraint_name is not None:
+                self.execute(
+                    self._create_unique_sql(
+                        model,
+                        [new_field],
+                        name=unique_constraint_name,
+                    )
                 )
             return
         if physical_change:

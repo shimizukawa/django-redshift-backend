@@ -12,7 +12,7 @@ from django.test.utils import isolate_apps, override_settings
 
 from django_redshift_backend import DistKey, SortKey
 
-from .schema_helpers import collect_schema_sql, make_wrapper
+from .schema_helpers import collect_schema_sql, make_wrapper, normalize_sql
 
 
 def _field_for(model, field, name="name"):
@@ -149,7 +149,7 @@ def test_recreation_uses_collision_free_temporary_column_name():
 
 
 @isolate_apps("driver_tests")
-def test_unique_varchar_enlargement_recreates_and_rebuilds_unique_constraint():
+def test_nullable_unique_varchar_enlargement_temporarily_drops_constraint():
     class Pony(models.Model):
         code = models.CharField(max_length=10, null=True, unique=True)
 
@@ -163,11 +163,59 @@ def test_unique_varchar_enlargement_recreates_and_rebuilds_unique_constraint():
         name="code",
     )
 
-    assert sql[0].startswith('ALTER TABLE "driver_tests_pony" ADD COLUMN')
-    assert not any(
-        "ALTER COLUMN" in statement and " TYPE " in statement for statement in sql
+    assert len(sql) == 3
+    assert sql[0].startswith(
+        'ALTER TABLE "driver_tests_pony" DROP CONSTRAINT '
     )
-    assert any('UNIQUE ("code")' in statement for statement in sql[4:])
+    assert sql[1] == (
+        'ALTER TABLE "driver_tests_pony" ALTER COLUMN "code" TYPE varchar(20);'
+    )
+    assert sql[2].startswith(
+        'ALTER TABLE "driver_tests_pony" ADD CONSTRAINT '
+    )
+    assert sql[2].endswith(' UNIQUE ("code");')
+
+
+@isolate_apps("driver_tests")
+def test_nonnull_unique_varchar_enlargement_uses_introspected_constraint_name():
+    class Pony(models.Model):
+        code = models.CharField(max_length=10, unique=True)
+
+        class Meta:
+            app_label = "driver_tests"
+
+    old_field = _field_for(
+        Pony, models.CharField(max_length=10, unique=True), "code"
+    )
+    new_field = _field_for(
+        Pony, models.CharField(max_length=20, unique=True), "code"
+    )
+    editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
+    editor.deferred_sql = []
+    editor.collect_sql = False
+    editor._constraint_names = lambda *args, **kwargs: [
+        "driver_tests_pony_code_key"
+    ]
+    collected_sql = []
+    editor.execute = lambda statement, params=(): collected_sql.append(
+        f"{statement};"
+    )
+
+    editor.alter_field(Pony, old_field, new_field)
+    sql = [normalize_sql(statement) for statement in collected_sql]
+
+    assert len(sql) == 3
+    assert sql[0] == (
+        'ALTER TABLE "driver_tests_pony" DROP CONSTRAINT '
+        '"driver_tests_pony_code_key";'
+    )
+    assert sql[1] == (
+        'ALTER TABLE "driver_tests_pony" ALTER COLUMN "code" TYPE varchar(20);'
+    )
+    assert sql[2] == (
+        'ALTER TABLE "driver_tests_pony" ADD CONSTRAINT '
+        '"driver_tests_pony_code_key" UNIQUE ("code");'
+    )
 
 
 @isolate_apps("driver_tests")
