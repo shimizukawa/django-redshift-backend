@@ -127,8 +127,29 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def get_new_connection(self, conn_params):
         return driver.connect(**conn_params)
 
+    def ensure_timezone(self):
+        connection_timezone_name = next(
+            (
+                value.decode("ascii")
+                for key, value in reversed(self.connection.parameter_statuses)
+                if key == b"TimeZone"
+            ),
+            None,
+        )
+        if connection_timezone_name == self.timezone_name:
+            return False
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config(%s, %s, false)",
+                ["timezone", self.timezone_name],
+            )
+        return True
+
     def init_connection_state(self):
         super().init_connection_state()
+        timezone_changed = self.ensure_timezone()
+        if timezone_changed and not self.get_autocommit():
+            self.connection.commit()
 
     def create_cursor(self, name=None):
         if name is not None:
