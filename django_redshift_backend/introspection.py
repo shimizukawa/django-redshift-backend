@@ -69,11 +69,11 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             SELECT table_name, table_type, remarks
             FROM svv_tables
             WHERE table_schema = current_schema()
-              AND table_type IN ('BASE TABLE', 'VIEW')
+              AND table_type IN ('BASE TABLE', 'EXTERNAL TABLE', 'VIEW')
             ORDER BY table_name
             """
         )
-        table_types = {"BASE TABLE": "t", "VIEW": "v"}
+        table_types = {"BASE TABLE": "t", "EXTERNAL TABLE": "t", "VIEW": "v"}
         return [
             TableInfo(name, table_types[table_type], comment)
             for name, table_type, comment in cursor.fetchall()
