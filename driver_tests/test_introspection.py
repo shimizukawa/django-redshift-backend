@@ -19,6 +19,7 @@ def test_table_list_queries_redshift_catalog_and_preserves_comments():
     cursor = mock.Mock()
     cursor.fetchall.return_value = (
         ("orders", "BASE TABLE", "order facts"),
+        ("spectrum_orders", "EXTERNAL TABLE", "external order facts"),
         ("order_summary", "VIEW", "summary"),
     )
 
@@ -26,12 +27,13 @@ def test_table_list_queries_redshift_catalog_and_preserves_comments():
 
     assert tables == [
         TableInfo("orders", "t", "order facts"),
+        TableInfo("spectrum_orders", "t", "external order facts"),
         TableInfo("order_summary", "v", "summary"),
     ]
     sql = " ".join(cursor.execute.call_args.args[0].split())
     assert "FROM svv_tables" in sql
     assert "table_schema = current_schema()" in sql
-    assert "table_type IN ('BASE TABLE', 'VIEW')" in sql
+    assert "table_type IN ('BASE TABLE', 'EXTERNAL TABLE', 'VIEW')" in sql
 
 
 def test_column_description_maps_identity_and_nullability():
