@@ -25,22 +25,27 @@ class FakeCursor:
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-    def execute(self, sql):
+    def execute(self, sql, params=None):
         if self.error:
             raise self.error
-        self.executed.append(sql)
+        self.executed.append((sql, params))
 
     def fetchmany(self, size=None):
         return tuple(self.rows[:size])
 
 
 class FakeConnection:
-    def __init__(self, cursor):
+    def __init__(self, cursor, timezone="UTC"):
         self._cursor = cursor
         self.autocommit = False
+        self.parameter_statuses = [(b"TimeZone", timezone.encode())]
+        self.commits = 0
 
     def cursor(self):
         return self._cursor
+
+    def commit(self):
+        self.commits += 1
 
 
 def settings_dict(**overrides):
@@ -131,13 +136,32 @@ def test_autocommit_uses_public_driver_attribute():
     assert wrapper.connection.autocommit is True
 
 
-def test_init_connection_state_delegates_without_session_sql():
+def test_init_connection_state_leaves_matching_timezone_unchanged():
     wrapper = DatabaseWrapper(settings_dict(), "foundation-test")
     wrapper.connection = FakeConnection(FakeCursor())
+    wrapper.__dict__["timezone_name"] = "UTC"
     with patch.object(BaseDatabaseWrapper, "init_connection_state") as initialize:
         wrapper.init_connection_state()
     initialize.assert_called_once_with()
     assert wrapper.connection._cursor.executed == []
+
+
+@pytest.mark.parametrize(
+    ("autocommit", "expected_commits"),
+    [(False, 1), (True, 0)],
+)
+def test_init_connection_state_sets_mismatched_timezone(autocommit, expected_commits):
+    wrapper = DatabaseWrapper(settings_dict(), "foundation-test")
+    wrapper.connection = FakeConnection(FakeCursor(), timezone="UTC")
+    wrapper.__dict__["timezone_name"] = "Asia/Tokyo"
+    wrapper.autocommit = autocommit
+
+    wrapper.init_connection_state()
+
+    assert wrapper.connection._cursor.executed == [
+        ("SELECT set_config(%s, %s, false)", ["timezone", "Asia/Tokyo"])
+    ]
+    assert wrapper.connection.commits == expected_commits
 
 
 def test_is_usable_executes_health_query():
@@ -145,7 +169,7 @@ def test_is_usable_executes_health_query():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(cursor)
     assert wrapper.is_usable() is True
-    assert cursor.executed == ["SELECT 1"]
+    assert cursor.executed == [("SELECT 1", None)]
 
 
 def test_is_usable_swallows_driver_error():
