@@ -119,6 +119,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         return driver.connect(**conn_params)
 
     def ensure_timezone(self):
+        if self.connection is None:
+            return False
         connection_timezone_name = next(
             (
                 value.decode("ascii")
