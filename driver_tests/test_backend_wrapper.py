@@ -188,6 +188,12 @@ def test_init_connection_state_leaves_matching_timezone_unchanged():
     assert wrapper.connection._cursor.executed == []
 
 
+def test_ensure_timezone_ignores_unopened_connection():
+    wrapper = DatabaseWrapper(settings_dict(), "foundation-test")
+
+    assert wrapper.ensure_timezone() is False
+
+
 @pytest.mark.parametrize(
     ("autocommit", "expected_commits"),
     [(False, 1), (True, 0)],
