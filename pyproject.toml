@@ -32,7 +32,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "django>=4.2.30,<6.2",
+    "django>=4.2",
     "redshift-connector>=2.1.14,<3",
 ]
 
