@@ -2,8 +2,8 @@
 
 ## Status
 
-Approved for planning on 2026-08-23. Implementation beyond the driver
-investigation must not begin until that pull request records a GO decision.
+Approved for planning on 2026-08-23. The stacked implementation and the
+human-operated real-Redshift release gate were completed in September 2026.
 
 ## Context
 
@@ -28,7 +28,7 @@ The design was checked against these local Django sources:
 
 ## Goals
 
-- Support Django 4.2.30 as a compatibility bridge for existing users, plus
+- Support Django 4.2 as a compatibility bridge for existing users, plus
   Django 5.2 LTS and Django 6.x as normally supported releases.
 - Replace psycopg2 with AWS's `redshift_connector` after an explicit adoption
   investigation.
@@ -46,7 +46,7 @@ The design was checked against these local Django sources:
 ## Non-goals
 
 - Providing upstream security maintenance for the end-of-life Django 4.2
-  series, or supporting Django releases older than 4.2.30.
+  series, or supporting Django releases older than 4.2.
 - Retaining psycopg2 as an alternative runtime driver.
 - Maintaining a psycopg2 compatibility adapter around `redshift_connector`.
 - Inheriting from or copying a complete Django PostgreSQL backend.
@@ -59,9 +59,8 @@ The design was checked against these local Django sources:
 
 ## Supported version matrix
 
-The first redesigned release declares
-`Django>=4.2.30,<6.2,!=5.0.*,!=5.1.*` and `requires-python>=3.10`. Its required
-CI matrix is:
+The first redesigned release declares `Django>=4.2` and
+`requires-python>=3.10`. Its officially supported and required CI matrix is:
 
 - Django 4.2.30 on Python 3.10, 3.11, and 3.12.
 - Django 5.2 on Python 3.10, 3.11, 3.12, 3.13, and 3.14.
@@ -81,10 +80,11 @@ schema compatibility module, its selection branch, and its dedicated tests
 must then be removable together.
 
 Django's `main` branch is tested on Python 3.14 as a non-blocking early-warning
-job and is not a supported release target. A future Django 6.x minor is not
-claimed automatically: support requires a focused pull request that inspects
-its database backend release notes, adds the stable minor to the dependency
-range and full supported Python matrix, and makes those jobs blocking.
+job and is not a supported release target. The dependency metadata does not
+prevent use with otherwise compatible Django versions outside the official
+matrix. Official support for a future Django minor requires a focused pull
+request that inspects its database backend release notes, adds the stable minor
+to the full supported Python matrix, and makes those jobs blocking.
 
 ## Public compatibility contract
 
@@ -435,7 +435,7 @@ The redesign is complete when:
 
 - The driver investigation records GO and every adoption criterion is covered
   by evidence.
-- Django 4.2.30, Django 5.2, and the supported Django 6.x matrix pass without
+- Django 4.2, Django 5.2, and the supported Django 6.x matrix pass without
   the vendored backend.
 - Every Django 4.2-only schema override is isolated in `schema_django42.py` and
   covered by a dedicated test, so the module, selection branch, and tests can
@@ -448,5 +448,7 @@ The redesign is complete when:
   removed.
 - Documentation states all breaking changes and that the initial redesigned
   release supports username/password authentication only.
-- A human has completed and recorded the real-Redshift release gate; alternate
-  authentication work remains recorded as deferred follow-up work.
+- The release gate has passed against Redshift Serverless with both example
+  projects, and the temporary CloudFormation stack, workgroup, namespace, and
+  snapshots have been removed. Alternate-authentication work is recorded in a
+  follow-up issue.
