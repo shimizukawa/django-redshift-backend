@@ -1,0 +1,111 @@
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.db.backends.base.features import BaseDatabaseFeatures
+from django.db.backends.base.introspection import BaseDatabaseIntrospection
+from django.db.backends.base.operations import BaseDatabaseOperations
+from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.backends.utils import CursorDebugWrapper, CursorWrapper
+from django.db.utils import NotSupportedError
+
+from . import driver
+from .client import DatabaseClient
+from .creation import DatabaseCreation
+
+
+class FetchmanyListMixin:
+    def fetchmany(self, size=None):
+        return list(self.cursor.fetchmany(size))
+
+
+class DatabaseCursorWrapper(FetchmanyListMixin, CursorWrapper):
+    pass
+
+
+class DatabaseCursorDebugWrapper(FetchmanyListMixin, CursorDebugWrapper):
+    pass
+
+
+class DatabaseWrapper(BaseDatabaseWrapper):
+    vendor = "redshift"
+    display_name = "Amazon Redshift"
+    Database = driver.Database
+
+    client_class = DatabaseClient
+    creation_class = DatabaseCreation
+    features_class = BaseDatabaseFeatures
+    introspection_class = BaseDatabaseIntrospection
+    ops_class = BaseDatabaseOperations
+    SchemaEditorClass = BaseDatabaseSchemaEditor
+
+    data_types = {}
+    data_types_suffix = {}
+    data_type_check_constraints = {}
+    operators = {
+        "exact": "= %s",
+        "iexact": "= UPPER(%s)",
+        "contains": "LIKE %s",
+        "icontains": "LIKE UPPER(%s)",
+        "regex": "~ %s",
+        "iregex": "~* %s",
+        "gt": "> %s",
+        "gte": ">= %s",
+        "lt": "< %s",
+        "lte": "<= %s",
+        "startswith": "LIKE %s",
+        "endswith": "LIKE %s",
+        "istartswith": "LIKE UPPER(%s)",
+        "iendswith": "LIKE UPPER(%s)",
+    }
+
+    def get_connection_params(self):
+        return driver.build_connect_kwargs(self.settings_dict)
+
+    def get_new_connection(self, conn_params):
+        return driver.connect(**conn_params)
+
+    def ensure_timezone(self):
+        if self.connection is None:
+            return False
+        connection_timezone_name = next(
+            (
+                value.decode("ascii")
+                for key, value in reversed(self.connection.parameter_statuses)
+                if key == b"TimeZone"
+            ),
+            None,
+        )
+        if connection_timezone_name == self.timezone_name:
+            return False
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config(%s, %s, false)",
+                ["timezone", self.timezone_name],
+            )
+        return True
+
+    def init_connection_state(self):
+        super().init_connection_state()
+        timezone_changed = self.ensure_timezone()
+        if timezone_changed and not self.get_autocommit():
+            self.connection.commit()
+
+    def create_cursor(self, name=None):
+        if name is not None:
+            raise NotSupportedError("Amazon Redshift does not support named cursors.")
+        return self.connection.cursor()
+
+    def make_cursor(self, cursor):
+        return DatabaseCursorWrapper(cursor, self)
+
+    def make_debug_cursor(self, cursor):
+        return DatabaseCursorDebugWrapper(cursor, self)
+
+    def _set_autocommit(self, autocommit):
+        self.connection.autocommit = autocommit
+
+    def is_usable(self):
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+        except self.Database.Error:
+            return False
+        return True

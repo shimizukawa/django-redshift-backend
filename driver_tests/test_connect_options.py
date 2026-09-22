@@ -1,14 +1,17 @@
 import inspect
 
 import pytest
-import redshift_connector
+from django.core.exceptions import ImproperlyConfigured
 
-from driver_tests.option_contract import (
+from django_redshift_backend.driver import (
+    DBSHELL_OPTIONS,
     DEFERRED_AUTH_OPTIONS,
     REQUIRED_DRIVER_OPTIONS,
+    Database,
     build_connect_kwargs,
     classify_dbshell_options,
     classify_options,
+    connect,
     redact_connect_kwargs,
 )
 
@@ -62,7 +65,7 @@ DEFERRED_AUTH_CASES = (
 
 
 def test_public_connect_signature_covers_password_scope():
-    parameters = set(inspect.signature(redshift_connector.connect).parameters)
+    parameters = set(inspect.signature(Database.connect).parameters)
     assert REQUIRED_DRIVER_OPTIONS <= parameters
 
 
@@ -103,7 +106,7 @@ def test_deferred_authentication_options_are_rejected_before_connect(name, value
         "PASSWORD": "password-value",
         "OPTIONS": {name: value},
     }
-    with pytest.raises(ValueError, match="username/password-only"):
+    with pytest.raises(ImproperlyConfigured, match="username/password-only"):
         build_connect_kwargs(settings)
 
 
@@ -156,7 +159,7 @@ def test_deferred_authentication_options_are_rejected_before_connect(name, value
 def test_password_authentication_requires_nonempty_user_and_password(
     settings, missing
 ):
-    with pytest.raises(ValueError, match=missing):
+    with pytest.raises(ImproperlyConfigured, match=missing):
         build_connect_kwargs(settings)
 
 
@@ -179,7 +182,27 @@ def test_dbshell_and_driver_options_are_classified_by_consumer():
 
 @pytest.mark.parametrize("sslmode", ["disable", "allow", "prefer", "require"])
 def test_legacy_sslmode_is_rejected_by_driver_option_validation(sslmode):
-    with pytest.raises(ValueError, match=sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_options({"sslmode": sslmode})
+    assert "verify-ca" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert sslmode not in str(error.value)
+
+
+def test_invalid_driver_sslmode_error_does_not_echo_its_value():
+    invalid_sslmode = "distinctive-invalid-driver-sslmode"
+
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_options({"sslmode": invalid_sslmode})
+
+    assert "verify-ca" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert invalid_sslmode not in str(error.value)
+
+
+@pytest.mark.parametrize("sslmode", [42, []])
+def test_non_string_driver_sslmode_is_a_configuration_error(sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode"):
         classify_options({"sslmode": sslmode})
 
 
@@ -190,17 +213,34 @@ def test_dbshell_preserves_the_full_psql_sslmode_domain(sslmode):
     assert classify_dbshell_options({"sslmode": sslmode}) == {"sslmode": sslmode}
 
 
+def test_invalid_dbshell_sslmode_error_does_not_echo_its_value():
+    invalid_sslmode = "distinctive-invalid-dbshell-sslmode"
+
+    with pytest.raises(ImproperlyConfigured, match="sslmode") as error:
+        classify_dbshell_options({"sslmode": invalid_sslmode})
+
+    assert "disable" in str(error.value)
+    assert "verify-full" in str(error.value)
+    assert invalid_sslmode not in str(error.value)
+
+
+@pytest.mark.parametrize("sslmode", [42, [], None])
+def test_non_string_dbshell_sslmode_is_a_configuration_error(sslmode):
+    with pytest.raises(ImproperlyConfigured, match="sslmode"):
+        classify_dbshell_options({"sslmode": sslmode})
+
+
 @pytest.mark.parametrize(
     "name",
     ["options", "isolation_level", "cursor_factory", "connection_factory", "client_encoding"],
 )
 def test_legacy_psycopg2_options_are_rejected(name):
-    with pytest.raises(ValueError, match=name):
+    with pytest.raises(ImproperlyConfigured, match=name):
         classify_options({name: "value"})
 
 
 def test_unknown_options_are_rejected():
-    with pytest.raises(ValueError, match="unknown_option"):
+    with pytest.raises(ImproperlyConfigured, match="unknown_option"):
         classify_options({"unknown_option": True})
 
 
@@ -227,3 +267,31 @@ def test_credentials_are_redacted_without_changing_non_secrets():
         "token": "********",
         "region": "ap-northeast-1",
     }
+
+
+def test_connect_delegates_only_validated_keyword_arguments(monkeypatch):
+    calls = []
+    expected = object()
+
+    def fake_connect(**kwargs):
+        calls.append(kwargs)
+        return expected
+
+    monkeypatch.setattr("django_redshift_backend.driver.Database.connect", fake_connect)
+
+    result = connect(user="alice", password="secret", host="example.test")
+
+    assert result is expected
+    assert calls == [{"user": "alice", "password": "secret", "host": "example.test"}]
+
+
+def test_invalid_port_is_a_redacted_configuration_error():
+    settings = {
+        "USER": "alice",
+        "PASSWORD": "secret",
+        "PORT": "not-a-port",
+        "OPTIONS": {},
+    }
+    with pytest.raises(ImproperlyConfigured, match="PORT must be an integer") as error:
+        build_connect_kwargs(settings)
+    assert "not-a-port" not in str(error.value)
