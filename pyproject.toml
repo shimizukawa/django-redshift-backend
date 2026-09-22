@@ -68,6 +68,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.packages.find]
+include = ["django_redshift_backend*"]
+
 [tool.setuptools_scm]
 # this empty section means: use_scm_version=True
 version_scheme = "guess-next-dev"
@@ -75,6 +78,9 @@ local_scheme = "no-local-version"
 
 [tool.ruff]
 exclude = ["django_redshift_backend/_vendor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.uv.sources]
 django-redshift-backend = { workspace = true }
