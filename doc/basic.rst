@@ -11,20 +11,15 @@ Please install django-redshift-backend with using pip (8.1.1 or later).
 
    $ pip install django-redshift-backend
 
-This backend requires ``psycopg2``, which may be installed from source or wheel (pre-built binaries).
-If you don't want to specify it separately, you may install it using extra:
+This backend uses AWS's official ``redshift-connector`` Python driver, which
+is installed automatically with this package:
 
 .. code-block:: bash
 
-   # For pre-built binary
-   $ pip install django-redshift-backend[psycopg2-binary]
+   $ pip install django-redshift-backend
 
-   # For the source distribution
-   $ pip install django-redshift-backend[psycopg2]
-
-Please refer to the `psycopg2 documentation`_ for more details on the topic.
-
-.. _psycopg2 documentation: https://www.psycopg.org/docs/install.html#psycopg-vs-psycopg-binary
+The initial 6.0 release supports username/password authentication. IAM and
+identity-provider authentication are deferred.
 
 Django settings
 ===============

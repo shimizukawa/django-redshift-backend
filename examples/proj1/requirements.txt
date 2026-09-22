@@ -1,2 +1,2 @@
--e ../..[psycopg2-binary]
+-e ../..
 django-environ==0.8.1

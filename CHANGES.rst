@@ -1,14 +1,37 @@
 CHANGES
 =======
 
-5.1.0 (unreleased)
+6.0.0 (unreleased)
 ------------------
 
 General:
 
+* Replace psycopg2 with AWS's official ``redshift-connector`` driver.
+* Remove the vendored Django 4.0 database backend implementation.
+* Upgrading the package does not create or apply database migrations and does
+  not modify existing Redshift tables.
+
+Incompatible Changes:
+
+* Drop Python 3.9 support.
+* Drop support for Django versions before 4.2.
+* Remove the psycopg2 installation extras and psycopg2-specific connection
+  options.
+* Support username/password authentication only. IAM, profile, and
+  identity-provider authentication are not supported in this release.
+* Unsupported ordinary indexes, constraints, and table or field options now
+  fail explicitly instead of being silently ignored.
+
 Features:
 
+* Officially support and test Django 4.2, 5.2, 6.0, and 6.1.
+* Support Python 3.10 through 3.14.
+
 Bug Fixes:
+
+* Apply ``DistKey`` operations in newly executed migrations instead of
+  silently ignoring them. Historical migrations already recorded as applied
+  are not replayed, and existing tables are not modified automatically.
 
 5.0.0 (2024/11/28)
 ------------------
