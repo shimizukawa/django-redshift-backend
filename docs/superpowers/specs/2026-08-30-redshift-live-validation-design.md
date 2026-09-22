@@ -8,6 +8,11 @@ authentication scope beyond username/password. Updated on 2026-08-31 to remove
 the operator-supplied expiration value and ineffective informational tag;
 prompt, verified `cdk destroy` remains the lifecycle control.
 
+Completed in September 2026. The release gate passed against Redshift
+Serverless with `examples/proj1` and `examples/dj-sql-explorer`. After
+`cdk destroy`, read-only AWS checks confirmed that the CloudFormation stack,
+workgroup, namespace, and manual snapshots were absent.
+
 ## Purpose
 
 The unit and contract suites prove Django and driver behavior without AWS, but
