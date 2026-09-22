@@ -98,6 +98,7 @@ Most type reductions and nullability changes recreate a column with ``ADD``,
 Review ``sqlmigrate`` output and take an appropriate backup before applying
 it; this backend does not advertise transactional DDL rollback.
 
-Live verification against Redshift remains deferred because this release has
-no real cluster available. The AWS documentation is the authoritative contract
-for the generated DDL in this release.
+The version 6 release gate exercised representative migration workflows on
+Redshift Serverless with the ``proj1`` and ``dj-sql-explorer`` examples. Review
+generated SQL for application-specific migrations; the AWS documentation
+remains the authoritative contract for Redshift DDL.

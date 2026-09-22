@@ -37,8 +37,9 @@ tox have several sections for testing.
 
 The test suite validates generated migration SQL without a database server.
 The ``driver_tests`` migration corpus replays the existing ``tests/testapp``
-migrations and protects their serialized public API paths. Live verification
-against Redshift is a future task.
+migrations and protects their serialized public API paths. The version 6
+release gate was also verified against Redshift Serverless with the ``proj1``
+and ``dj-sql-explorer`` example projects.
 
 CI (Continuous Integration)
 ----------------------------
