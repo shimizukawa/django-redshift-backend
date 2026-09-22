@@ -15,7 +15,8 @@ Remove the psycopg2 adapter and vendored Django 4.0 tree. Keep `meta.py` and
 
 ## Metadata and verification
 
-Use `redshift-connector>=2.1.14,<3`, Django `>=4.2.30,<6.2`, and version
-6.0.0. Update classifiers, release notes, and CI. Database-free tests must
-prove public activation, legacy removal, migration compatibility, builds, and
-the supported Django/driver matrix. Live Redshift validation remains deferred.
+Use `redshift-connector>=2.1.14,<3`, Django `>=4.2`, and version 6.0.0. Update
+classifiers, release notes, and CI. Database-free tests must prove public
+activation, legacy removal, migration compatibility, builds, and the supported
+Django/driver matrix. The release gate was additionally completed against
+Redshift Serverless with both example projects.

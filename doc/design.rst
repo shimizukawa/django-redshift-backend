@@ -49,7 +49,7 @@ Key Challenges
 ==============
 
 1. **Version Compatibility**:
-   Django 4.2.30 support uses a narrowly isolated compatibility path that can
+   Django 4.2 support uses a narrowly isolated compatibility path that can
    be removed when that release line is no longer supported.
 
 2. **SQL Differences**: 
@@ -77,7 +77,8 @@ Testing and Validation
 Future Considerations
 ============================
 
-1. Live verification against a real Redshift cluster remains a future task.
-
-2. Remove the isolated Django 4.2 compatibility path when support for that
+1. Remove the isolated Django 4.2 compatibility path when support for that
    release line is eventually dropped.
+
+The version 6 release gate was verified against Redshift Serverless with the
+``proj1`` and ``dj-sql-explorer`` example projects.
