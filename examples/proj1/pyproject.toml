@@ -1,0 +1,13 @@
+[project]
+name = "proj1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10, <4"
+dependencies = [
+    "django-environ==0.8.1",
+    "django-redshift-backend",
+]
+
+[tool.uv.sources]
+django-redshift-backend = { path = "../..", editable = true }
