@@ -4,7 +4,6 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from django_redshift_backend.driver import (
-    DBSHELL_OPTIONS,
     DEFERRED_AUTH_OPTIONS,
     REQUIRED_DRIVER_OPTIONS,
     Database,
@@ -156,9 +155,7 @@ def test_deferred_authentication_options_are_rejected_before_connect(name, value
         ),
     ],
 )
-def test_password_authentication_requires_nonempty_user_and_password(
-    settings, missing
-):
+def test_password_authentication_requires_nonempty_user_and_password(settings, missing):
     with pytest.raises(ImproperlyConfigured, match=missing):
         build_connect_kwargs(settings)
 
@@ -232,7 +229,13 @@ def test_non_string_dbshell_sslmode_is_a_configuration_error(sslmode):
 
 @pytest.mark.parametrize(
     "name",
-    ["options", "isolation_level", "cursor_factory", "connection_factory", "client_encoding"],
+    [
+        "options",
+        "isolation_level",
+        "cursor_factory",
+        "connection_factory",
+        "client_encoding",
+    ],
 )
 def test_legacy_psycopg2_options_are_rejected(name):
     with pytest.raises(ImproperlyConfigured, match=name):
