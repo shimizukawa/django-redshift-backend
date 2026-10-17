@@ -6,7 +6,7 @@
 
 **Architecture:** `schema.py` inherits Django's installed `BaseDatabaseSchemaEditor` and implements focused Redshift DDL helpers instead of copying Django's `_alter_field()`. `schema_django42.py` is a deletion-oriented subclass selected only for Django 4.2, while `_backend.DatabaseWrapper` registers the new editor and explicit type mappings without activating the public engine in `base.py`. Migration-corpus tests apply operations through `collect_sql=True` without a database connection.
 
-**Tech Stack:** Python 3.10-3.14, Django 4.2.30/5.2/6.x public base-backend and migration APIs, `redshift-connector>=2.1.14,<3`, pytest 8, uv, Ruff 0.6.2, GitHub Actions.
+**Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base-backend and migration APIs, `redshift-connector>=2.1.14,<3`, pytest 8, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-25-schema-migration-design.md`
 

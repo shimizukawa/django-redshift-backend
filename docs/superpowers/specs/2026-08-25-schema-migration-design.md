@@ -27,7 +27,7 @@ are allowed, but the package never repairs an existing database automatically.
 
 - Implement Redshift DDL using the installed Django
   `BaseDatabaseSchemaEditor` as the base class.
-- Support the schema-editor contracts of Django 4.2.30, 5.2, and the supported
+- Support the schema-editor contracts of Django 4.2, 5.2, and the supported
   Django 6.x minors.
 - Keep Django 4.2-only behavior isolated and deletion-oriented.
 - Preserve existing `DistKey`, `SortKey`, and historical migration import and
@@ -477,7 +477,7 @@ Tests cover:
 The schema and migration contracts run on every supported combination already
 established by the redesign:
 
-- Django 4.2.30 on Python 3.10-3.12;
+- Django 4.2 (validated with 4.2.30) on Python 3.10-3.12;
 - Django 5.2 on Python 3.10-3.14;
 - supported Django 6.x minors on Python 3.12-3.14.
 
