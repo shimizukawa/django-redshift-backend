@@ -6,7 +6,7 @@
 
 **Architecture:** Production settings validation and AWS driver calls live only in `driver.py`; an internal `_backend.py` composes the connection lifecycle with conservative Django base components. `client.py` preserves `psql` behavior and `creation.py` rejects unsupported database provisioning, while the current `base.py` remains untouched until the final activation layer.
 
-**Tech Stack:** Python 3.10-3.14, Django 4.2.30/5.2/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
+**Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-24-backend-foundation-design.md`
 

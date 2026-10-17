@@ -205,7 +205,7 @@ introspection layers pass their gates. The activation PR will:
 - Password-only validation and all 45 alternate-authentication rejections run
   before driver connection.
 - All wrapper lifecycle methods behave against fake public DB-API objects on
-  Django 4.2.30, 5.2, 6.0, and 6.1.
+  Django 4.2, 5.2, 6.0, and 6.1.
 - dbshell behavior is preserved without importing a PostgreSQL backend.
 - Unsupported test database operations fail explicitly before SQL execution.
 - Current `base.py` and public migration APIs remain unchanged.
