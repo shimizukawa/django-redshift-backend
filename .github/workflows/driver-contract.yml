@@ -28,6 +28,7 @@ jobs:
           - {python: "3.13", django: "Django~=6.1.0", driver: "2.1.14"}
           - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.14"}
           - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.16"}
+          - {python: "3.12", django: "Django==5.2.8", driver: "2.2.0"}
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
