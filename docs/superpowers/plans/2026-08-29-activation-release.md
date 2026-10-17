@@ -17,7 +17,7 @@
 ### Task 2: Remove legacy implementation and update packaging
 
 - [ ] Write failing tests asserting no package source imports psycopg2 or `_vendor`.
-- [ ] Remove `_vendor` and `psycopg2adapter.py`; update `pyproject.toml` to Django `>=4.2.30,<6.2`, `redshift-connector>=2.1.14,<3`, and 6.0 classifiers.
+- [ ] Remove `_vendor` and `psycopg2adapter.py`; update `pyproject.toml` to Django `>=4.2`, `redshift-connector>=2.1.14,<3`, and 6.0 classifiers.
 - [ ] Regenerate `uv.lock`, run build/twine checks, and commit.
 
 ### Task 3: Release record and matrix
