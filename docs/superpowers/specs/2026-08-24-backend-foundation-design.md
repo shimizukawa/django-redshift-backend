@@ -14,6 +14,17 @@ layers are still incomplete.
 
 ## Scope
 
+### TLS defaults
+
+An omitted `OPTIONS["sslmode"]` is omitted from the connector call, so the
+installed driver's default applies. Explicit `verify-ca` and `verify-full`
+values are preserved. Connector 2.2.0 changes the default from `verify-ca` to
+`verify-full`, with a transitional warning and continued connection on a
+hostname mismatch only when the option is omitted. Explicit `verify-full`
+rejects a mismatch. The backend does not pin the older TLS default.
+
+Source: [AWS connector changelog](https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md).
+
 This layer provides:
 
 - A `BaseDatabaseWrapper`-based internal wrapper with Django's required

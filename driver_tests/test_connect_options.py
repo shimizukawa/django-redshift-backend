@@ -93,6 +93,21 @@ def test_standard_settings_map_and_override_duplicate_options():
     }
 
 
+@pytest.mark.parametrize("sslmode", [None, "verify-ca", "verify-full"])
+def test_connection_sslmode_preserves_explicit_choice_or_driver_default(sslmode):
+    settings = {
+        "NAME": "warehouse",
+        "USER": "app_user",
+        "PASSWORD": "password-value",
+        "OPTIONS": {} if sslmode is None else {"sslmode": sslmode},
+    }
+    kwargs = build_connect_kwargs(settings)
+    if sslmode is None:
+        assert "sslmode" not in kwargs
+    else:
+        assert kwargs["sslmode"] == sslmode
+
+
 def test_deferred_authentication_inventory_is_explicit():
     assert DEFERRED_AUTH_OPTIONS == {name for name, _ in DEFERRED_AUTH_CASES}
 
