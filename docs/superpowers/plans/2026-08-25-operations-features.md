@@ -6,7 +6,7 @@
 
 **Architecture:** `features.py` and `operations.py` inherit only Django's public base-backend classes and are registered only by the internal `_backend.DatabaseWrapper`. Feature flags are conservative and evidence-backed; SQL methods preserve parameters and reject PostgreSQL-only syntax before execution. `base.py` remains the active engine until the final stack layer.
 
-**Tech Stack:** Python 3.10-3.14, Django 4.2.30/5.2.8/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
+**Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-25-operations-features-design.md`
 

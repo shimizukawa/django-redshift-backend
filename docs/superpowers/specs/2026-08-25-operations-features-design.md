@@ -5,7 +5,7 @@
 ## Goal
 
 Add an AWS-free operations and feature-contract layer for the redesigned
-backend on Django 4.2.30, 5.2, 6.0, and 6.1. The layer fixes the modern Django
+backend on Django 4.2, 5.2, 6.0, and 6.1. The layer fixes the modern Django
 operation signatures behind issue #171, preserves useful Redshift behavior
 from the existing backend, incorporates the intent of pull request #103, and
 removes accidental PostgreSQL capability claims without activating the new
