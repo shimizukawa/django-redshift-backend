@@ -78,6 +78,44 @@ sanitized results in the live-validation PR checklist.
 All validation data must remain in this disposable namespace. Clean up objects
 created by a probe when practical, and do not hide cleanup failures.
 
+## Connector 2.2.0 differential validation
+
+The earlier live results used connector 2.1.16 and remain historical evidence.
+The 2.2.0 live check is separate and is pending until its results are recorded.
+After the human-operated deploy, use the actual endpoint hostname and the
+existing project settings. From `examples/proj1`, run:
+
+```powershell
+uv run --with redshift-connector==2.2.0 python -c "from importlib.metadata import version; print(version('redshift-connector'))"
+uv run --with redshift-connector==2.2.0 python manage.py check
+uv run --with redshift-connector==2.2.0 python manage.py migrate
+uv run --with redshift-connector==2.2.0 python manage.py inspectdb auth_group
+```
+
+Confirm a database query and a reversible ORM write/read/delete round trip;
+`check` alone does not establish a database connection. On the same connection,
+repeat table discovery, column description, and constraint lookup to exercise
+the metadata changes introduced in 2.1.17. Run both projects with the pinned
+driver and record their resolved versions and sanitized results.
+
+For TLS, verify connection with `sslmode` omitted, then with explicit
+`verify-full`, using the existing settings' `DATABASES['default']['OPTIONS']`
+before opening the connection. Record TLS settings and any warning without
+logging the password. Do not use `ssl=False`. In a separate controlled TLS
+test environment with a trusted certificate and deliberately mismatched
+hostname, verify these 2.2.0 expectations:
+
+| sslmode | Hostname matches | Hostname mismatches |
+| --- | --- | --- |
+| omitted | connect | warn and connect |
+| `verify-full` | connect | reject |
+| `verify-ca` | connect | connect (chain still verified) |
+
+An untrusted certificate must still be rejected. The CDK environment supplies
+an AWS endpoint, not a deliberate certificate mismatch; do not interpret its
+successful connection as coverage of the mismatch cases. Record unexecuted
+cases as pending. Destroy and verify absence after the AWS session as below.
+
 ## Destroy and verify
 
 Destroy is required after success, failure, or an interrupted investigation:
