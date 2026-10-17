@@ -39,3 +39,20 @@ ENGINE for DATABASES is 'django_redshift_backend'. You can set the name in your 
 
 For more information, please refer :doc:`refs`.
 
+TLS verification
+================
+
+When ``OPTIONS['sslmode']`` is omitted, the installed ``redshift-connector``
+version determines TLS verification. Version 2.2.0 changes the default from
+``verify-ca`` (certificate-chain verification) to ``verify-full`` (also checks
+the hostname). In 2.2.0, an omitted mode permits a hostname mismatch with a
+warning; AWS plans to reject such mismatches in a future release.
+
+Set ``OPTIONS = {'sslmode': 'verify-full'}`` to require both certificate-chain
+and hostname verification explicitly. A mismatch then fails the connection.
+Explicit ``verify-ca`` is also supported. These settings apply when TLS is
+enabled; use the actual Redshift endpoint hostname for the connection.
+
+See the `AWS connector changelog
+<https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md>`_.
+
