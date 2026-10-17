@@ -8,8 +8,8 @@ Both examples used Python 3.12.15, Django 6.1.1, and explicitly selected
 `redshift-connector==2.2.0`; django-sql-explorer was 5.3. No production backend
 change was required. The earlier 2.1.16 evidence remains valid for its version.
 
-The application and controlled TLS differential checks passed. Human-operated
-`cdk destroy` and post-destroy absence verification are still pending.
+The application and controlled TLS differential checks passed. The human ran
+`cdk destroy` on 2026-10-17, and post-destroy absence verification completed.
 
 ## Execution
 
@@ -94,9 +94,15 @@ Temporary certificates and keys are removed by its temporary-directory scope.
 This complements the actual AWS endpoint checks; it does not reconfigure AWS
 certificates, trust roots, or hostname verification.
 
-## Cleanup still required
+## Cleanup verified
 
-The human must run `cdk destroy`. Confirm the CloudFormation stack, Serverless
-workgroup, namespace, and manual snapshots are absent, then remove local
-`cdk.out` and clear populated connection settings. Do not label the AWS
-cleanup complete until those checks have run.
+After the human ran `cdk destroy` on 2026-10-17, the first AWS checks found the
+workgroup absent, no matching snapshots, and stack/namespace deletion in
+progress. Subsequent checks confirmed the CloudFormation stack and namespace
+were also absent. No additional resource deletion was initiated by the agent.
+
+The generated `examples/cdk/cdk.out` assembly containing the temporary password
+was removed. The human-maintained ignored Explorer `.env` was preserved; its
+connection settings now refer to the deleted validation environment. Temporary
+credential-aware probe scripts were removed, and both example lockfiles were
+unchanged. PR #9's 59 CI checks passed before this cleanup-record update.

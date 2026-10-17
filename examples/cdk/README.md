@@ -83,7 +83,8 @@ created by a probe when practical, and do not hide cleanup failures.
 The earlier live results used connector 2.1.16 and remain historical evidence.
 The 2.2.0 differential application and controlled TLS checks passed on
 2026-10-17; see the [sanitized evidence](../../docs/superpowers/research/2026-10-17-redshift-connector-2.2.0-live.md).
-The environment still requires human-operated destroy and absence verification.
+The human-operated destroy and post-destroy resource absence checks also
+completed on 2026-10-17.
 After the human-operated deploy, use the actual endpoint hostname and the
 existing project settings. From `examples/proj1`, run:
 
