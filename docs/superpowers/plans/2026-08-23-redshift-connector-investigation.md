@@ -11,7 +11,7 @@ fixtures. Test only public driver APIs, model the future Django settings
 crosswalk in a non-runtime contract helper, and record behaviors that require a
 real Redshift service as deferred rather than claiming they were verified.
 
-**Tech Stack:** Python 3.10-3.14, Django 4.2.30/5.2/6.0/6.1, uv,
+**Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1, uv,
 pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
@@ -28,7 +28,11 @@ pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
 - Test the security floor `redshift_connector==2.1.14` and the investigated
   release `redshift_connector==2.1.16`; the proposed GO constraint is
   `redshift-connector>=2.1.14,<3`.
-- Treat Django 4.2.30 as a bounded compatibility bridge on Python 3.10-3.12.
+- Treat Django 4.2 as a bounded compatibility bridge on Python 3.10-3.12.
+  Use Django 4.2.30 for reproducible validation of that release series; this
+  test pin does not impose a minimum patch version on users.
+- Officially support Django 4.2, 5.2, 6.0, and 6.1 with package dependency
+  `django>=4.2`; compatible versions outside that matrix are not excluded.
 - Test Django 5.2 on Python 3.10-3.14 and Django 6.0/6.1 on Python 3.12-3.14.
 - Never log or snapshot passwords, access keys, secret keys, session tokens,
   client secrets, web identity tokens, or bearer tokens.
@@ -939,7 +943,8 @@ real-Redshift checks.
 
 - Public DB-API, username/password connection, cursor, exception, and option
   contracts are tested; alternate authentication is explicitly deferred.
-- Django 4.2.30, 5.2, 6.0, and 6.1 compatibility jobs are blocking.
+- Django 4.2, 5.2, 6.0, and 6.1 compatibility jobs are blocking; the Django
+  4.2 jobs use the reproducible test pin 4.2.30.
 - Both the 2.1.14 security floor and investigated 2.1.16 release are covered.
 - No private driver API or psycopg2 compatibility adapter is required.
 

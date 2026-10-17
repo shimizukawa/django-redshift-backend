@@ -62,7 +62,7 @@ The design was checked against these local Django sources:
 The first redesigned release declares `Django>=4.2` and
 `requires-python>=3.10`. Its officially supported and required CI matrix is:
 
-- Django 4.2.30 on Python 3.10, 3.11, and 3.12.
+- Django 4.2 (validated with 4.2.30) on Python 3.10, 3.11, and 3.12.
 - Django 5.2 on Python 3.10, 3.11, 3.12, 3.13, and 3.14.
 - Django 6.0 on Python 3.12, 3.13, and 3.14.
 - Django 6.1 on Python 3.12, 3.13, and 3.14.
@@ -341,7 +341,7 @@ or limitation that the redesign fixes.
   objects.
 - Settings mapping and secret-redaction tests.
 - Connection lifecycle, transaction, autocommit, exception, and health tests.
-- Django 4.2.30, Django 5.2, and supported Django 6.x operation signature
+- Django 4.2, Django 5.2, and supported Django 6.x operation signature
   tests.
 - Schema-editor selection tests proving that Django 4.2 alone uses
   `schema_django42.py`, while later versions use the common implementation.
