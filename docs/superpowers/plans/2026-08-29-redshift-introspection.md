@@ -6,7 +6,7 @@
 
 **Architecture:** `DatabaseIntrospection` converts the public `redshift_connector` metadata methods into Django `TableInfo`, `FieldInfo`, relations, and constraints. A narrow `information_schema` query supplies UNIQUE metadata unavailable from the driver. A Django-4.2 subclass adapts only the relation tuple shape; 5.2 and 6.x share the common implementation.
 
-**Tech Stack:** Python 3.10+, Django 4.2.30/5.2/6.x, `redshift-connector>=2.1.14,<3`, pytest, uv.
+**Tech Stack:** Python 3.10+, Django 4.2/5.2/6.0/6.1, `redshift-connector>=2.1.14,<3`, pytest, uv.
 
 **Spec:** `docs/superpowers/specs/2026-08-29-introspection-design.md`
 
@@ -14,7 +14,7 @@
 
 - Keep `django_redshift_backend.base` and the public `ENGINE="django_redshift_backend"` inactive until stack layer 06.
 - Do not change models, migrations, schema SQL, `meta.py`, `distkey.py`, or package dependency metadata.
-- Support Django 4.2.30, 5.2, and 6.x. Isolate only the 4.2 relation tuple compatibility in a removable module.
+- Support Django 4.2, 5.2, 6.0, and 6.1. Isolate only the 4.2 relation tuple compatibility in a removable module.
 - Use AWS Metadata API for tables, columns, PKs, and imported FKs. Use no direct `pg_catalog` query.
 - UNIQUE metadata may use only a parameterized `information_schema` query.
 - No live Redshift validation is available. Mocks must assert observable driver calls and Django-facing results.

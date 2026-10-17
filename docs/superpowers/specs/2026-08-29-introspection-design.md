@@ -3,8 +3,8 @@
 ## Goal
 
 Implement the Redshift-specific introspection layer used by the internal
-`django_redshift_backend._backend` entry point. It must support Django 4.2.30,
-5.2, and 6.x without requiring existing users to change models, migration
+`django_redshift_backend._backend` entry point. It must support Django 4.2,
+5.2, 6.0, and 6.1 without requiring existing users to change models, migration
 files, or database schema merely because they upgrade this package.
 
 The layer must make `inspectdb` useful for ordinary Redshift tables without a
