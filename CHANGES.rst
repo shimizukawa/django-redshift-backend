@@ -10,6 +10,22 @@ Features:
 
 Bug Fixes:
 
+5.0.1.dev1 (unreleased)
+-----------------------
+
+This development release verifies publishing after the repository transfer.
+Known functional problems remain unresolved; this release does not indicate
+that the backend has been repaired or verified for production use.
+
+General:
+
+* Move maintenance from Jazzband to shimizukawa, preserving the project's history.
+* Publish directly to PyPI using Trusted Publishing (OIDC) and PEP 740 attestations.
+* Add manual TestPyPI publishing for verification.
+* Update current project links, contribution and reporting guidance, and release
+  instructions for the new repository owner.
+* Existing Ruff lint findings are outside the scope of this release.
+
 5.0.0 (2024/11/28)
 ------------------
 

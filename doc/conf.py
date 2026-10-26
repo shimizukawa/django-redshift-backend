@@ -6,7 +6,8 @@ project = 'Django Redshift Backend'
 copyright = '2018, Django Redshift Backend team'
 author = 'Django Redshift Backend team'
 
-version = release = '1.0'
+version = '5.0'
+release = '5.0.1.dev1'
 
 # -- General configuration ---------------------------------------------------
 

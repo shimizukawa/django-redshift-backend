@@ -1,10 +1,15 @@
-.. image:: https://jazzband.co/static/img/jazzband.svg
-   :target: https://jazzband.co/
-   :alt: Jazzband
+Contributing
+============
 
-This is a Jazzband_ project. By contributing you agree to abide by the `Contributor Code of Conduct`_ and follow the guidelines_.
+django-redshift-backend is maintained at
+https://github.com/shimizukawa/django-redshift-backend.
 
-.. _Jazzband: https://jazzband.co/
-.. _Contributor Code of Conduct: https://jazzband.co/about/conduct
-.. _guidelines: https://jazzband.co/about/guidelines
+Bug reports and pull requests are welcome. See the `development guide`_ for
+setup and testing instructions. By contributing, you agree to follow the
+`Code of Conduct`_.
 
+Report security vulnerabilities privately using the procedure in SECURITY.md,
+not in a public issue.
+
+.. _development guide: https://django-redshift-backend.readthedocs.io/en/master/dev.html
+.. _Code of Conduct: https://github.com/shimizukawa/django-redshift-backend/blob/master/CODE_OF_CONDUCT.md
