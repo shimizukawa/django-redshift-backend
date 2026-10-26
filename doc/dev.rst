@@ -12,7 +12,7 @@ Issue Reporting
 
 **To Be Written**
 
-* https://github.com/jazzband/django-redshift-backend/issues
+* https://github.com/shimizukawa/django-redshift-backend/issues
 
 Setup development environment
 =============================
@@ -52,7 +52,7 @@ CI (Continuous Integration)
 
 All tests will be run on Github Actions:
 
-* https://github.com/jazzband/django-redshift-backend/actions?query=workflow%3ATest
+* https://github.com/shimizukawa/django-redshift-backend/actions?query=workflow%3ATest
 
 
 Pull Request
@@ -60,7 +60,7 @@ Pull Request
 
 **To Be Written**
 
-* https://github.com/jazzband/django-redshift-backend/pulls
+* https://github.com/shimizukawa/django-redshift-backend/pulls
 
 
 Build package
@@ -79,7 +79,7 @@ New package version
 
 The django-redshift-backend package will be uploaded to PyPI: https://pypi.org/project/django-redshift-backend/.
 
-Here is a release procefure for releasing.
+Use the checklist below to track release readiness.
 
 .. include:: ../checklist.rst
 

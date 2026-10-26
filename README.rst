@@ -4,10 +4,6 @@ Redshift database backend for Django
 
 This is a `Amazon Redshift`_ database backend for Django_.
 
-.. image:: https://jazzband.co/static/img/badge.svg
-    :target: https://jazzband.co/
-    :alt: Jazzband
-
 .. image:: https://img.shields.io/readthedocs/django-redshift-backend/master.svg
    :alt: Read the Docs (master)
    :target: https://django-redshift-backend.rtfd.io/
@@ -24,17 +20,17 @@ This is a `Amazon Redshift`_ database backend for Django_.
    :alt: PyPI - Django Version
    :target: https://pypi.org/project/django-redshift-backend/
 
-.. image:: https://img.shields.io/github/license/jazzband/django-redshift-backend.svg
+.. image:: https://img.shields.io/github/license/shimizukawa/django-redshift-backend.svg
    :alt: License
-   :target: https://github.com/jazzband/django-redshift-backend/blob/master/LICENSE
+   :target: https://github.com/shimizukawa/django-redshift-backend/blob/master/LICENSE
 
-.. image:: https://github.com/jazzband/django-redshift-backend/workflows/Test/badge.svg
-   :target: https://github.com/jazzband/django-redshift-backend/actions
+.. image:: https://github.com/shimizukawa/django-redshift-backend/actions/workflows/test.yml/badge.svg?branch=master
+   :target: https://github.com/shimizukawa/django-redshift-backend/actions
    :alt: GitHub Actions
 
-.. image:: https://img.shields.io/github/stars/jazzband/django-redshift-backend.svg?style=social&label=Stars
+.. image:: https://img.shields.io/github/stars/shimizukawa/django-redshift-backend.svg?style=social&label=Stars
    :alt: GitHub stars
-   :target: https://github.com/jazzband/django-redshift-backend
+   :target: https://github.com/shimizukawa/django-redshift-backend
 
 .. _Amazon Redshift: https://aws.amazon.com/jp/redshift/
 .. _Django: https://www.djangoproject.com/

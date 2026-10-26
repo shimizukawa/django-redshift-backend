@@ -56,10 +56,10 @@ dev = [
 
 [project.urls]
 Documentation = "https://django-redshift-backend.readthedocs.io/"
-Homepage = "https://github.com/jazzband/django-redshift-backend"
+Homepage = "https://github.com/shimizukawa/django-redshift-backend"
 "Release notes" = "https://django-redshift-backend.readthedocs.io/en/master/changes.html"
-Source = "https://github.com/jazzband/django-redshift-backend"
-Tracker = "https://github.com/jazzband/django-redshift-backend/issues"
+Source = "https://github.com/shimizukawa/django-redshift-backend"
+Tracker = "https://github.com/shimizukawa/django-redshift-backend/issues"
 
 [build-system]
 requires = ["setuptools>=64", "setuptools_scm>=8"]
