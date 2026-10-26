@@ -10,7 +10,7 @@ Features:
 
 Bug Fixes:
 
-5.0.1.dev1 (unreleased)
+5.0.1.dev1 (2026/10/26)
 -----------------------
 
 This development release verifies publishing after the repository transfer.
