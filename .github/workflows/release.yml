@@ -3,9 +3,6 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    # Temporary branch trigger for pre-merge TestPyPI verification.
-    branches:
-    - ci/pypi-trusted-publishing-pep740
     tags:
     - '*'
 
@@ -67,7 +64,7 @@ jobs:
           attestations: true
 
   publish-testpypi:
-    if: github.repository == 'shimizukawa/django-redshift-backend' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/ci/pypi-trusted-publishing-pep740'))
+    if: github.repository == 'shimizukawa/django-redshift-backend' && github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     environment:
