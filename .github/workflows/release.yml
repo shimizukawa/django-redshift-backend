@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
     - '*'
@@ -59,5 +60,29 @@ jobs:
       - name: Publish distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          packages-dir: dist/
+          attestations: true
+
+  publish-testpypi:
+    if: github.repository == 'shimizukawa/django-redshift-backend' && github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/django-redshift-backend
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+      - name: Publish distributions to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
           attestations: true
