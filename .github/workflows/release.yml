@@ -5,9 +5,12 @@ on:
     tags:
     - '*'
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    if: github.repository == 'jazzband/django-redshift-backend'
+    if: github.repository == 'shimizukawa/django-redshift-backend'
     runs-on: ubuntu-latest
 
     steps:
@@ -29,10 +32,32 @@ jobs:
           uv build
           uvx twine check dist/*
 
-      - name: Upload packages to Jazzband
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        uses: pypa/gh-action-pypi-publish@master
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
         with:
-          user: jazzband
-          password: ${{ secrets.JAZZBAND_RELEASE_KEY }}
-          repository_url: https://jazzband.co/projects/django-redshift-backend/upload
+          name: release-dists
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    if: github.repository == 'shimizukawa/django-redshift-backend' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/django-redshift-backend
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          attestations: true
