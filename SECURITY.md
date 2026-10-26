@@ -11,9 +11,3 @@ Do not disclose vulnerability details in a public issue.
 For ordinary bugs and questions, use
 [GitHub Issues](https://github.com/shimizukawa/django-redshift-backend/issues).
 For unacceptable behavior, follow [the Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Development releases
-
-The 5.0.1.dev1 release is intended to verify the publishing process after the
-repository transfer. It does not resolve the project's known functional problems
-and is not a production-readiness or security assurance.
