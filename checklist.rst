@@ -1,12 +1,10 @@
 .. release checklist
 
-- [ ] Review CI results and record accepted known failures.
-- [ ] Update the release version, date, scope, and known limitations in ``CHANGES.rst``.
-- [ ] Build and check the wheel and source distribution; verify versions and project URLs.
-- [ ] Confirm the PyPI Trusted Publisher and GitHub ``pypi`` environment settings.
-- [ ] Complete TestPyPI verification if needed.
-- [ ] Verify the tagged build's version before pushing the release tag.
-- [ ] Review and approve the deployment if required by the environment.
-- [ ] Confirm the PyPI files, attestations, and explicit-version installation.
-- [ ] Mark a development GitHub Release as a pre-release, if creating one.
-
+- [ ] Review CI results and known failures.
+- [ ] Update ``CHANGES.rst`` and ``version = release`` in ``doc/conf.py``.
+- [ ] Run ``uv build`` and ``uvx twine check dist/*``; check versions and project URLs.
+- [ ] Confirm Trusted Publishing and environment settings (``pypi``; ``testpypi`` for testing).
+- [ ] If needed, manually run the ``Release`` workflow to publish to TestPyPI.
+- [ ] Create the version tag, verify the tagged build's version, then push the tag to publish to PyPI.
+- [ ] Approve the deployment if required; check PyPI files, attestations, and installation.
+- [ ] If creating a GitHub Release for a development version, mark it as a pre-release.
