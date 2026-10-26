@@ -3,10 +3,10 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Django Redshift Backend'
-copyright = '2018, Django Redshift Backend team'
+copyright = '2026, Django Redshift Backend team'
 author = 'Django Redshift Backend team'
 
-version = release = '1.0'
+version = release = '5.0.1.dev1'
 
 # -- General configuration ---------------------------------------------------
 
