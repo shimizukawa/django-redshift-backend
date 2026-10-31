@@ -1393,7 +1393,8 @@ $cells = @(
     @('3.12', 'Django~=6.1.0', '2.1.14'),
     @('3.13', 'Django~=6.1.0', '2.1.14'),
     @('3.14', 'Django~=6.1.0', '2.1.14'),
-    @('3.14', 'Django~=6.1.0', '2.1.16')
+    @('3.14', 'Django~=6.1.0', '2.1.16'),
+    @('3.12', 'Django==5.2.8', '2.2.0')
 )
 foreach ($cell in $cells) {
     uv --cache-dir .uv-cache run --python $cell[0] --project driver_tests --with $cell[1] --with "redshift-connector==$($cell[2])" --with psycopg2-binary pytest driver_tests -q
