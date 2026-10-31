@@ -71,6 +71,7 @@ import re
 
 from django_redshift_backend._backend import DatabaseWrapper
 
+
 def settings_dict():
     return {
         "NAME": "warehouse",
@@ -85,14 +86,17 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
+
 def make_wrapper(alias="schema-contract"):
     return DatabaseWrapper(settings_dict(), alias)
+
 
 def collect_schema_sql(callback):
     wrapper = make_wrapper()
     with wrapper.schema_editor(collect_sql=True, atomic=False) as editor:
         callback(editor)
     return [normalize_sql(statement) for statement in editor.collected_sql]
+
 
 def normalize_sql(sql):
     return re.sub(r"\s+", " ", str(sql)).strip()
@@ -115,8 +119,10 @@ from django_redshift_backend.schema_django42 import (
 
 from .schema_helpers import make_wrapper
 
+
 def test_schema_editor_uses_installed_public_base_class():
     assert issubclass(DatabaseSchemaEditor, BaseDatabaseSchemaEditor)
+
 
 def test_django42_selection_is_one_deletion_oriented_branch():
     assert _backend.schema_editor_class_for((4, 2, 30)) is DatabaseSchemaEditor42
@@ -124,11 +130,13 @@ def test_django42_selection_is_one_deletion_oriented_branch():
     assert _backend.schema_editor_class_for((6, 0, 0)) is DatabaseSchemaEditor
     assert _backend.schema_editor_class_for((6, 1, 0)) is DatabaseSchemaEditor
 
+
 def test_internal_wrapper_registers_selected_schema_editor():
     wrapper = make_wrapper()
     assert wrapper.SchemaEditorClass is _backend.schema_editor_class_for(
         __import__("django").VERSION
     )
+
 
 def test_redshift_data_types_and_identity_suffixes_are_explicit():
     assert _backend.DatabaseWrapper.data_types["AutoField"] == "integer"
@@ -143,6 +151,7 @@ def test_redshift_data_types_and_identity_suffixes_are_explicit():
         "BigAutoField": "identity(1, 1)",
         "SmallAutoField": "identity(1, 1)",
     }
+
 
 def test_quote_value_supports_database_free_sql_collection():
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
@@ -166,6 +175,7 @@ Append to `driver_tests/test_activation_boundary.py`:
 
 ```python
 from django_redshift_backend.schema import DatabaseSchemaEditor
+
 
 def test_new_schema_editor_is_internal_only():
     assert _backend.DatabaseWrapper.SchemaEditorClass.__module__.startswith(
@@ -195,6 +205,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+
 
 class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
@@ -229,6 +240,7 @@ Create `django_redshift_backend/schema_django42.py`:
 ```python
 from .schema import DatabaseSchemaEditor as CommonDatabaseSchemaEditor
 
+
 class DatabaseSchemaEditor(CommonDatabaseSchemaEditor):
     """Django 4.2-only deletion boundary.
 
@@ -246,12 +258,14 @@ import django
 
 from .schema import DatabaseSchemaEditor
 
+
 def schema_editor_class_for(version):
     if version[:2] == (4, 2):
         from .schema_django42 import DatabaseSchemaEditor as DatabaseSchemaEditor42
 
         return DatabaseSchemaEditor42
     return DatabaseSchemaEditor
+
 
 class DatabaseWrapper(BaseDatabaseWrapper):
     SchemaEditorClass = schema_editor_class_for(django.VERSION)
@@ -331,6 +345,7 @@ from django_redshift_backend import DistKey, SortKey
 
 from .schema_helpers import collect_schema_sql
 
+
 @isolate_apps("driver_tests")
 def test_create_model_emits_redshift_types_and_table_keys():
     class Referenced(models.Model):
@@ -362,6 +377,7 @@ def test_create_model_emits_redshift_types_and_table_keys():
     assert 'FOREIGN KEY ("customer_id")' in joined
     assert 'REFERENCES "driver_tests_referenced" ("id")' in joined
 
+
 @override_settings(REDSHIFT_VARCHAR_LENGTH_MULTIPLIER=3)
 @isolate_apps("driver_tests")
 def test_create_model_applies_varchar_byte_multiplier_once():
@@ -373,6 +389,7 @@ def test_create_model_applies_varchar_byte_multiplier_once():
 
     sql = collect_schema_sql(lambda editor: editor.create_model(Label))
     assert '"value" varchar(300)' in " ".join(sql)
+
 
 @pytest.mark.parametrize("fields", [[], ["id", "name"]])
 @isolate_apps("driver_tests")
@@ -386,6 +403,7 @@ def test_distkey_requires_exactly_one_field(fields):
 
     with pytest.raises(ValueError, match="exactly one field"):
         collect_schema_sql(lambda editor: editor.create_model(InvalidKey))
+
 
 @isolate_apps("driver_tests")
 def test_create_model_rejects_more_than_one_distkey():
@@ -403,6 +421,7 @@ def test_create_model_rejects_more_than_one_distkey():
     with pytest.raises(ValueError, match="more than one DistKey"):
         collect_schema_sql(lambda editor: editor.create_model(DuplicateKey))
 
+
 @isolate_apps("driver_tests")
 def test_create_model_rejects_ordinary_model_index():
     class Indexed(models.Model):
@@ -414,6 +433,7 @@ def test_create_model_rejects_ordinary_model_index():
 
     with pytest.raises(NotSupportedError, match="ordinary_idx"):
         collect_schema_sql(lambda editor: editor.create_model(Indexed))
+
 
 @isolate_apps("driver_tests")
 def test_db_index_is_an_implicit_noop_not_create_index_sql():
@@ -594,6 +614,7 @@ from django_redshift_backend import DistKey
 
 from .schema_helpers import collect_schema_sql
 
+
 @isolate_apps("driver_tests")
 def test_add_distkey_uses_alter_distkey():
     class Event(models.Model):
@@ -608,6 +629,7 @@ def test_add_distkey_uses_alter_distkey():
         'ALTER TABLE "driver_tests_event" ALTER DISTKEY "customer";'
     ]
 
+
 @isolate_apps("driver_tests")
 def test_remove_distkey_returns_table_to_auto_distribution():
     class Event(models.Model):
@@ -621,6 +643,7 @@ def test_remove_distkey_returns_table_to_auto_distribution():
     assert sql == [
         'ALTER TABLE "driver_tests_event" ALTER DISTSTYLE AUTO;'
     ]
+
 
 @pytest.mark.parametrize("method", ["add_index", "remove_index"])
 @isolate_apps("driver_tests")
@@ -652,6 +675,7 @@ def test_simple_unique_constraint_is_informational_ddl():
     assert sql == [
         'ALTER TABLE "driver_tests_event" ADD CONSTRAINT "event_code_uniq" UNIQUE ("code");'
     ]
+
 
 @pytest.mark.parametrize(
     "constraint",
@@ -773,6 +797,7 @@ from django.test.utils import isolate_apps
 
 from .schema_helpers import collect_schema_sql
 
+
 @isolate_apps("driver_tests")
 def test_add_nullable_field_is_direct():
     class Pony(models.Model):
@@ -788,6 +813,7 @@ def test_add_nullable_field_is_direct():
     assert sql == [
         'ALTER TABLE "driver_tests_pony" ADD COLUMN "name" varchar(10) NULL;'
     ]
+
 
 @isolate_apps("driver_tests")
 def test_add_nonnull_field_keeps_python_default_for_compatibility():
@@ -805,6 +831,7 @@ def test_add_nonnull_field_keeps_python_default_for_compatibility():
         'ALTER TABLE "driver_tests_pony" ADD COLUMN "name" varchar(10) DEFAULT \'unknown\' NOT NULL;'
     ]
 
+
 @isolate_apps("driver_tests")
 def test_add_nonnull_field_without_default_fails_before_execution():
     class Pony(models.Model):
@@ -818,6 +845,7 @@ def test_add_nonnull_field_without_default_fails_before_execution():
     field.model = Pony
     with pytest.raises(NotSupportedError, match="non-null.*default"):
         collect_schema_sql(lambda editor: editor.add_field(Pony, field))
+
 
 @isolate_apps("driver_tests")
 def test_add_unique_field_separates_column_and_constraint():
@@ -1286,6 +1314,7 @@ Keep `DATABASES={}` so importing and rendering migration state cannot connect to
 ```python
 from django.apps import apps
 
+
 def test_existing_migration_corpus_app_is_installed_without_database():
     assert apps.get_app_config("testapp").name == "tests.testapp"
 ```
@@ -1305,6 +1334,7 @@ from django.db.migrations.state import ProjectState
 from django_redshift_backend import DistKey, SortKey
 from django_redshift_backend.distkey import DistKey as LegacyDistKey
 
+
 def test_historical_public_paths_remain_stable():
     assert LegacyDistKey is DistKey
     assert DistKey(fields=["customer"], name="customer_distkey").deconstruct()[1] == (
@@ -1314,16 +1344,19 @@ def test_historical_public_paths_remain_stable():
         "django_redshift_backend.SortKey"
     )
 
+
 def test_existing_migration_module_imports_unchanged():
     module = import_module("tests.testapp.migrations.0001_initial")
     migration = module.Migration("0001_initial", "testapp")
     assert migration.initial is True
     assert migration.operations
 
+
 def test_loader_builds_disk_graph_without_connection(monkeypatch):
     loader = MigrationLoader(None, ignore_no_migrations=True)
     assert ("testapp", "0001_initial") in loader.disk_migrations
     assert loader.graph.leaf_nodes("testapp") == [("testapp", "0001_initial")]
+
 
 def test_unchanged_rendered_state_has_no_detected_changes():
     loader = MigrationLoader(None, ignore_no_migrations=True)
@@ -1388,6 +1421,7 @@ Use `call_command()` with no database settings:
 
 ```python
 from django.core.management import call_command
+
 
 def test_makemigrations_check_requires_no_new_migration(capsys):
     call_command("makemigrations", "testapp", check=True, dry_run=True, verbosity=1)
@@ -1515,6 +1549,7 @@ def test_new_schema_path_has_no_vendored_or_psycopg2_dependency():
     assert "_vendor" not in source
     assert "psycopg2" not in source
     assert "django.db.backends.postgresql" not in source
+
 
 def test_schema_editor_does_not_copy_django_alter_field_commentary():
     source = (root / "schema.py").read_text(encoding="utf-8")
