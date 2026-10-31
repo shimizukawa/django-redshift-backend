@@ -1414,55 +1414,12 @@ git status --short
 
 Expected: only `driver.py` imports `redshift_connector`; redesigned components have no PostgreSQL or vendored imports; forbidden files are unchanged; diff check passes; status is clean.
 
-- [ ] **Step 5: Prepare the stacked PR description in memory**
+- [ ] **Step 5: Prepare the operations and feature contracts for review**
 
-Use this structure when the finishing workflow selects push/PR:
-
-```markdown
-## Scope
-
-Add independent Redshift operations and conservative feature contracts as the
-direct child of the Backend foundation PR. The public backend entry point
-remains inactive.
-
-## Decisions
-
-- AWS documentation is authoritative for enabled Redshift capabilities.
-- Issue #171 is fixed through modern Django date/time operation signatures.
-- Pull request #103's complete intent is adopted: ManyToMany uses Django's
-  pre-check path and explicit conflict-ignore is unsupported.
-- Pull request #104 remains deferred; no custom compiler is introduced.
-- Existing `MAX(pk)` identity retrieval is preserved with its concurrency
-  limitation documented.
-
-## Compatibility
-
-- No database migration or schema change.
-- `base.py`, `meta.py`, `distkey.py`, and existing migration files are unchanged.
-- Intentional corrections reject PostgreSQL-only conflict, savepoint, EXPLAIN,
-  JSON-operator, index, tablespace, collation, and TRUNCATE assumptions.
-- These corrections remain inactive until the final activation layer.
-
-## Verification
-
-- All 15 Django/Python/driver cells passed; exact per-cell test counts are
-  recorded in the verification comment generated from the matrix output.
-- Root regression: 10 passed, 22 skipped.
-- Ruff, package build, twine check, wheel inspection, and boundary checks passed.
-- No AWS credentials, PostgreSQL, Redshift, or psql was required.
-
-## Parent
-
-https://github.com/shimizukawa/django-redshift-backend/pull/4
-
-## Tracking
-
-https://github.com/shimizukawa/django-redshift-backend/pull/1
-```
-
-Update tracking PR #1's stack checklist, current status, decisions, risks, and
-verification, then append one progress comment containing the observed per-cell
-test counts. Link the new PR above PR #4 in the existing GitHub stack.
+Describe the operation signatures, supported capabilities, intentional
+compatibility corrections, and unchanged public entry point in the PR.
+Link its dependencies using current PR URLs. Record observed test results and
+delivery progress in the PR discussion rather than this implementation plan.
 
 - [ ] **Step 6: Stop for the finishing workflow**
 

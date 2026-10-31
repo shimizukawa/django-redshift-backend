@@ -1,7 +1,5 @@
 # Operations and Features Design
 
-**Status:** Approved for implementation on 2026-08-25.
-
 ## Goal
 
 Add an AWS-free operations and feature-contract layer for the redesigned
@@ -334,16 +332,16 @@ connect to PostgreSQL or Redshift.
 
 Project history:
 
-- [Issue #14: SELECT DISTINCT ON is not supported](https://github.com/jazzband/django-redshift-backend/issues/14)
-- [Issue #102: Error when adding to ManyToManyField](https://github.com/jazzband/django-redshift-backend/issues/102)
-- [Pull request #103: Removes the unsupported ON CONFLICT DO NOTHING clause](https://github.com/jazzband/django-redshift-backend/pull/103)
-- [Pull request #104: add distinct on support](https://github.com/jazzband/django-redshift-backend/pull/104)
-- [Issue #109: AutoField generates duplicate identity syntax](https://github.com/jazzband/django-redshift-backend/issues/109)
-- [Issue #167: Reimplementation for Django 4.2+](https://github.com/jazzband/django-redshift-backend/issues/167)
-- [Issue #168: Add Django 5.2 support](https://github.com/jazzband/django-redshift-backend/issues/168)
-- [Issue #171: Operations signatures incompatible with Django 4.1+](https://github.com/jazzband/django-redshift-backend/issues/171)
-- [Issue #175: IAM support](https://github.com/jazzband/django-redshift-backend/issues/175)
-- [Issue #183: Support Django 6](https://github.com/jazzband/django-redshift-backend/issues/183)
+- [Issue #14: SELECT DISTINCT ON is not supported](https://github.com/shimizukawa/django-redshift-backend/issues/14)
+- [Issue #102: Error when adding to ManyToManyField](https://github.com/shimizukawa/django-redshift-backend/issues/102)
+- [Pull request #103: Removes the unsupported ON CONFLICT DO NOTHING clause](https://github.com/shimizukawa/django-redshift-backend/pull/103)
+- [Pull request #104: add distinct on support](https://github.com/shimizukawa/django-redshift-backend/pull/104)
+- [Issue #109: AutoField generates duplicate identity syntax](https://github.com/shimizukawa/django-redshift-backend/issues/109)
+- [Issue #167: Reimplementation for Django 4.2+](https://github.com/shimizukawa/django-redshift-backend/issues/167)
+- [Issue #168: Add Django 5.2 support](https://github.com/shimizukawa/django-redshift-backend/issues/168)
+- [Issue #171: Operations signatures incompatible with Django 4.1+](https://github.com/shimizukawa/django-redshift-backend/issues/171)
+- [Issue #175: IAM support](https://github.com/shimizukawa/django-redshift-backend/issues/175)
+- [Issue #183: Support Django 6](https://github.com/shimizukawa/django-redshift-backend/issues/183)
 
 Amazon Redshift specifications:
 
@@ -370,14 +368,6 @@ Django sources inspected locally:
   that `supports_ignore_conflicts=False` selects the ManyToMany pre-check path.
 - Both versions' `django/db/models/query.py`, confirming that explicit
   `bulk_create(ignore_conflicts=True)` raises when the feature is false.
-
-## Delivery
-
-The work is delivered on `redesign/03-operations-features`, based directly on
-`redesign/02-backend-foundation`. Its pull request is added above PR #4 in the
-same GitHub stack and links tracking PR #1. Tracking PR #1 records the feature
-decisions, intentional compatibility corrections, review layers, and final CI
-results.
 
 ## Completion criteria
 
