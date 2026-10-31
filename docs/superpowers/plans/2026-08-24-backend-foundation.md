@@ -1,7 +1,5 @@
 # Backend Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Build an AWS-free, password-only Redshift connection foundation on Django's public base-backend classes without activating it through the existing `ENGINE` entry point.
 
 **Architecture:** Production settings validation and AWS driver calls live only in `driver.py`; an internal `_backend.py` composes the connection lifecycle with conservative Django base components. `client.py` preserves `psql` behavior and `creation.py` rejects unsupported database provisioning, while the current `base.py` remains untouched until the final activation layer.
@@ -74,7 +72,6 @@ def test_connect_delegates_only_validated_keyword_arguments(monkeypatch):
     assert result is expected
     assert calls == [{"user": "alice", "password": "secret", "host": "example.test"}]
 
-
 def test_invalid_port_is_a_redacted_configuration_error():
     settings = {
         "USER": "alice",
@@ -109,10 +106,8 @@ import inspect
 import redshift_connector as Database
 from django.core.exceptions import ImproperlyConfigured
 
-
 def _configuration_error(message):
     raise ImproperlyConfigured(message)
-
 
 def connect(**kwargs):
     return Database.connect(**kwargs)
@@ -155,7 +150,6 @@ Update `driver_tests/test_django_exceptions.py`:
 ```python
 from django_redshift_backend.driver import Database
 
-
 class Wrapper:
     Database = Database
 ```
@@ -185,15 +179,6 @@ Expected: no `option_contract` references; the production driver import appears
 only in `django_redshift_backend/driver.py`. Direct driver imports may remain in
 metadata/surface investigation tests that inspect the third-party package itself.
 
-- [ ] **Step 7: Commit the production driver boundary**
-
-```powershell
-git add django_redshift_backend/driver.py driver_tests
-git commit -m "feat: add Redshift driver boundary"
-```
-
----
-
 ### Task 2: Implement the internal base wrapper lifecycle
 
 **Files:**
@@ -219,7 +204,6 @@ from django.db.utils import NotSupportedError
 from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 class FakeCursor:
     def __init__(self, error=None):
         self.error = error
@@ -236,7 +220,6 @@ class FakeCursor:
             raise self.error
         self.executed.append(sql)
 
-
 class FakeConnection:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -244,7 +227,6 @@ class FakeConnection:
 
     def cursor(self):
         return self._cursor
-
 
 def settings_dict(**overrides):
     values = {
@@ -262,12 +244,10 @@ def settings_dict(**overrides):
     values.update(overrides)
     return values
 
-
 def test_wrapper_uses_public_base_backend():
     assert issubclass(DatabaseWrapper, BaseDatabaseWrapper)
     assert DatabaseWrapper.vendor == "redshift"
     assert DatabaseWrapper.Database is driver.Database
-
 
 def test_connection_params_use_password_contract():
     wrapper = DatabaseWrapper(settings_dict(), "default")
@@ -279,7 +259,6 @@ def test_connection_params_use_password_contract():
         "password": "secret",
     }
 
-
 def test_new_connection_delegates_to_driver(monkeypatch):
     wrapper = DatabaseWrapper(settings_dict(), "default")
     expected = object()
@@ -289,7 +268,6 @@ def test_new_connection_delegates_to_driver(monkeypatch):
     assert wrapper.get_new_connection(params) is expected
     assert calls == [params]
 
-
 def test_create_cursor_rejects_named_cursor():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(FakeCursor())
@@ -297,13 +275,11 @@ def test_create_cursor_rejects_named_cursor():
     with pytest.raises(NotSupportedError, match="named cursor"):
         wrapper.create_cursor(name="server-side")
 
-
 def test_autocommit_uses_public_driver_attribute():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(FakeCursor())
     wrapper._set_autocommit(True)
     assert wrapper.connection.autocommit is True
-
 
 def test_init_connection_state_delegates_without_session_sql():
     wrapper = DatabaseWrapper(settings_dict(), "foundation-test")
@@ -313,14 +289,12 @@ def test_init_connection_state_delegates_without_session_sql():
     initialize.assert_called_once_with()
     assert wrapper.connection._cursor.executed == []
 
-
 def test_is_usable_executes_health_query():
     cursor = FakeCursor()
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(cursor)
     assert wrapper.is_usable() is True
     assert cursor.executed == ["SELECT 1"]
-
 
 def test_is_usable_swallows_driver_error():
     cursor = FakeCursor(driver.Database.OperationalError("offline"))
@@ -354,7 +328,6 @@ from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.utils import NotSupportedError
 
 from . import driver
-
 
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = "redshift"
@@ -429,15 +402,6 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 
 Expected: all selected tests pass.
 
-- [ ] **Step 6: Commit the wrapper lifecycle**
-
-```powershell
-git add django_redshift_backend/_backend.py driver_tests/test_backend_wrapper.py driver_tests/test_django_exceptions.py
-git commit -m "feat: add base wrapper connection lifecycle"
-```
-
----
-
 ### Task 3: Preserve the psql dbshell contract
 
 **Files:**
@@ -458,7 +422,6 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from django_redshift_backend.client import DatabaseClient
-
 
 def test_psql_arguments_and_environment_preserve_existing_contract():
     settings = {
@@ -493,7 +456,6 @@ def test_psql_arguments_and_environment_preserve_existing_contract():
         "PGSSLKEY": "/tmp/client.key",
     }
 
-
 def test_service_omits_default_database_and_empty_environment_is_none():
     args, env = DatabaseClient.settings_to_cmd_args_env(
         {"NAME": "", "HOST": "", "PORT": "", "USER": "", "PASSWORD": "", "OPTIONS": {"service": "analytics"}},
@@ -502,7 +464,6 @@ def test_service_omits_default_database_and_empty_environment_is_none():
     assert args == ["psql"]
     assert env == {"PGSERVICE": "analytics"}
 
-
 def test_missing_name_and_service_uses_postgres_database():
     args, env = DatabaseClient.settings_to_cmd_args_env(
         {"NAME": "", "HOST": "", "PORT": "", "USER": "", "PASSWORD": "", "OPTIONS": {}},
@@ -510,7 +471,6 @@ def test_missing_name_and_service_uses_postgres_database():
     )
     assert args == ["psql", "postgres"]
     assert env is None
-
 
 def test_invalid_psql_sslmode_is_rejected():
     with pytest.raises(ImproperlyConfigured, match="Unsupported psql sslmode"):
@@ -538,7 +498,6 @@ Django's PostgreSQL client but no PostgreSQL backend import:
 from django.db.backends.base.client import BaseDatabaseClient
 
 from .driver import classify_dbshell_options
-
 
 class DatabaseClient(BaseDatabaseClient):
     executable_name = "psql"
@@ -587,7 +546,6 @@ In `django_redshift_backend/_backend.py`:
 ```python
 from .client import DatabaseClient
 
-
 class DatabaseWrapper(BaseDatabaseWrapper):
     client_class = DatabaseClient
 ```
@@ -603,15 +561,6 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 ```
 
 Expected: all selected tests pass and no test spawns `psql`.
-
-- [ ] **Step 6: Commit the independent dbshell client**
-
-```powershell
-git add django_redshift_backend/client.py django_redshift_backend/_backend.py driver_tests/test_client.py
-git commit -m "feat: preserve Redshift dbshell contract"
-```
-
----
 
 ### Task 4: Reject unsupported test database provisioning
 
@@ -636,7 +585,6 @@ from django.db.utils import NotSupportedError
 
 from django_redshift_backend.creation import DatabaseCreation
 
-
 class ConnectionThatMustNotBeUsed:
     settings_dict = {"NAME": "warehouse"}
 
@@ -645,7 +593,6 @@ class ConnectionThatMustNotBeUsed:
 
     def close(self):
         raise AssertionError("test database rejection must happen before close")
-
 
 @pytest.mark.parametrize(
     ("method_name", "args"),
@@ -668,7 +615,6 @@ Create `driver_tests/test_activation_boundary.py`:
 
 ```python
 from pathlib import Path
-
 
 def test_existing_engine_entry_point_is_not_activated():
     base_source = (
@@ -700,7 +646,6 @@ Create `django_redshift_backend/creation.py`:
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.utils import NotSupportedError
 
-
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(
         self, verbosity=1, autoclobber=False, serialize=None, keepdb=False
@@ -727,7 +672,6 @@ In `django_redshift_backend/_backend.py`:
 ```python
 from .creation import DatabaseCreation
 
-
 class DatabaseWrapper(BaseDatabaseWrapper):
     creation_class = DatabaseCreation
 ```
@@ -737,7 +681,6 @@ Remove the unused `BaseDatabaseCreation` import and add to
 
 ```python
 from django_redshift_backend.creation import DatabaseCreation
-
 
 def test_wrapper_registers_foundation_components():
     wrapper = DatabaseWrapper(settings_dict(), "default")
@@ -754,15 +697,6 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 ```
 
 Expected: all selected tests pass without accessing connection methods.
-
-- [ ] **Step 7: Commit explicit provisioning behavior**
-
-```powershell
-git add django_redshift_backend/creation.py django_redshift_backend/_backend.py driver_tests/test_creation.py driver_tests/test_activation_boundary.py driver_tests/test_backend_wrapper.py
-git commit -m "feat: define Redshift test database limits"
-```
-
----
 
 ### Task 5: Verify the complete foundation across the supported matrix
 
@@ -846,8 +780,6 @@ and confirm it contains `django_redshift_backend/driver.py`, `_backend.py`,
 ```powershell
 rg -n "import redshift_connector|from redshift_connector" django_redshift_backend -g "*.py"
 rg -n "django\.db\.backends\.postgresql|_vendor" django_redshift_backend/_backend.py django_redshift_backend/driver.py django_redshift_backend/client.py django_redshift_backend/creation.py
-git diff redesign/01-driver-investigation -- django_redshift_backend/base.py django_redshift_backend/meta.py django_redshift_backend/distkey.py
-git diff redesign/01-driver-investigation -- pyproject.toml .github/workflows/driver-contract.yml
 git diff --check
 ```
 
@@ -855,24 +787,3 @@ Expected: only `driver.py` imports the AWS driver; no new foundation module
 imports PostgreSQL or vendored code; the three compatibility files have no
 diff; dependency metadata and the already-complete 15-cell workflow have no
 diff; whitespace checks pass.
-
-- [ ] **Step 7: Commit any verification-only correction**
-
-If a matrix, lint, or package failure requires a correction, return to the task
-that owns the failing interface, add a regression test there, repeat its
-red/green cycle, and commit it with that task's files. If no correction is
-required, do not create an empty commit.
-
-- [ ] **Step 8: Prepare the stacked PR evidence**
-
-Record in the child PR body:
-
-- Base: `redesign/01-driver-investigation`
-- Head: `redesign/02-backend-foundation`
-- Password-only authentication scope
-- Current `base.py` intentionally not activated
-- All 15 compatibility results and root regression result
-- Real Redshift and alternate authentication deferred
-- No database migration or public migration-API change
-
-Record verification results and dependency links in the PR discussion.
