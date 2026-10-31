@@ -109,7 +109,7 @@ def test_internal_wrapper_registers_redshift_features():
         ("supports_on_delete_db_null", False),
         ("supports_paramstyle_pyformat", False),
         ("supports_select_for_update_with_limit", False),
-        ("supports_inspectdb", False),
+        ("supports_inspectdb", True),
         ("nulls_order_largest", True),
         ("delete_can_self_reference_subquery", True),
     ],
