@@ -228,6 +228,13 @@ raised configuration messages, or test snapshots.
 
 ## AWS driver adoption gate
 
+The runtime requirement is `redshift-connector>=2.1.14,<3`. Version 2.1.14
+is the security floor; 2.1.16 and 2.2.0 are additional compatibility targets.
+AWS-free driver contracts cover all three, and version-qualified live evidence
+covers 2.1.16 and 2.2.0. The 2.2.0 target includes TLS behavior and repeated
+metadata calls. An omitted `sslmode` delegates to the selected driver; explicit
+`verify-ca` and `verify-full` retain their documented driver semantics.
+
 The first implementation pull request investigates `redshift_connector` and
 must record one of two outcomes:
 
@@ -265,8 +272,8 @@ The adoption criteria are:
 - Username/password configuration has one validated settings boundary, and
   alternate authentication modes fail before connection.
 
-The selected driver version constraint is recorded in the investigation PR
-before it receives a GO decision.
+The adoption decision applies to the password-only scope and runtime constraint
+above; later driver versions require the same public contract checks.
 
 ## Preserving existing implementation knowledge
 

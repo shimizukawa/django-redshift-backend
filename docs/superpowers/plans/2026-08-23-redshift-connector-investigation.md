@@ -12,7 +12,7 @@ crosswalk in a non-runtime contract helper, and record behaviors that require a
 real Redshift service as deferred rather than claiming they were verified.
 
 **Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1, uv,
-pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
+pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
 
@@ -25,8 +25,8 @@ pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
 - Do not open a socket or require AWS credentials in normal CI.
 - Do not activate `redshift_connector` in `django_redshift_backend.base` in this
   PR.
-- Test the security floor `redshift_connector==2.1.14` and the investigated
-  release `redshift_connector==2.1.16`; the proposed GO constraint is
+- Test the security floor `redshift_connector==2.1.14` and compatibility
+  targets `redshift_connector==2.1.16` and `==2.2.0`; the runtime constraint is
   `redshift-connector>=2.1.14,<3`.
 - Treat Django 4.2 as a bounded compatibility bridge on Python 3.10-3.12.
   Use Django 4.2.30 for reproducible validation of that release series; this
@@ -121,8 +121,9 @@ uv lock --project driver_tests
 uv run --project driver_tests python -c "import redshift_connector; print(redshift_connector.__version__)"
 ```
 
-Expected: the lock succeeds and the command prints `2.1.16` for the initial
-investigation lock.
+Expected: the lock succeeds and the command prints the version selected by
+the committed lockfile. Explicit version overrides below verify all three
+compatibility targets independently of the lockfile default.
 
 - [ ] **Step 5: Commit the harness**
 
@@ -207,12 +208,13 @@ def test_dbapi_value_constructors_are_public():
         assert callable(getattr(redshift_connector, name))
 ```
 
-- [ ] **Step 2: Run against the investigated release**
+- [ ] **Step 2: Run against the compatibility targets**
 
 Run:
 
 ```powershell
 uv run --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_metadata_contract.py -v
+uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tests/test_metadata_contract.py -v
 ```
 
 Expected: all four tests PASS.
@@ -537,6 +539,7 @@ Run:
 ```powershell
 uv run --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connect_options.py -v
 uv run --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connect_options.py -v
+uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tests/test_connect_options.py -v
 ```
 
 Expected: all parameterized cases PASS for both releases.
@@ -684,13 +687,14 @@ def test_named_server_side_cursor_is_not_a_public_driver_contract():
     assert "name" not in inspect.signature(redshift_connector.Connection.cursor).parameters
 ```
 
-- [ ] **Step 2: Run against minimum and investigated releases**
+- [ ] **Step 2: Run against the minimum and compatibility targets**
 
 Run:
 
 ```powershell
 uv run --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_connection_cursor_contract.py -v
 uv run --project driver_tests --with redshift-connector==2.1.16 pytest driver_tests/test_connection_cursor_contract.py -v
+uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tests/test_connection_cursor_contract.py -v
 ```
 
 Expected: all three tests PASS. The named-cursor test records an explicit
@@ -711,7 +715,7 @@ git commit -m "test: record Redshift connection and cursor surface"
 **Interfaces:**
 - Consumes: all tests under `driver_tests/` and GitHub-hosted Python runners.
 - Produces: blocking coverage for every supported Django/Python combination at
-  the security floor, plus a latest-driver smoke job.
+  the security floor, plus explicit 2.1.16 and 2.2.0 compatibility jobs.
 
 - [ ] **Step 1: Create the dedicated workflow**
 
@@ -748,6 +752,7 @@ jobs:
           - {python: "3.13", django: "Django~=6.1.0", driver: "2.1.14"}
           - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.14"}
           - {python: "3.14", django: "Django~=6.1.0", driver: "2.1.16"}
+          - {python: "3.12", django: "Django==5.2.8", driver: "2.2.0"}
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -770,6 +775,7 @@ Run:
 uv run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshift-connector==2.1.14 pytest driver_tests -q
 uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 pytest driver_tests -q
 uv run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 pytest driver_tests -q
+uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.2.0 pytest driver_tests -q
 ```
 
 Expected: all tests PASS in all three representative environments.
@@ -809,14 +815,15 @@ every must-pass item below passes. Otherwise it must be exactly
 
 ## Candidate and proposed constraint
 
-- Investigated release: 2.1.16.
+- Compatibility targets: 2.1.14 (minimum), 2.1.16, and 2.2.0.
 - Security floor: 2.1.14, which contains the fix for GHSA-29h4-r29x-hchv.
-- Proposed runtime constraint after GO: `redshift-connector>=2.1.14,<3`.
+- Runtime constraint: `redshift-connector>=2.1.14,<3`.
 - Python metadata: `Requires-Python >=3.8`; CI verifies the project's 3.10-3.14 matrix.
 
 ## Maintenance, license, security, and dependencies
 
-- Record the 2.1.14-2.1.16 release dates and current release activity.
+- Record release metadata and compatibility-relevant changes through 2.2.0,
+  including its default TLS behavior and repeated-metadata-call fixes.
 - Record that wheel metadata says `Apache License 2.0` while its license
   classifier says BSD; resolve the discrepancy against the packaged LICENSE
   and NOTICE files before GO.
@@ -905,6 +912,7 @@ uv run --python 3.12 --project driver_tests --with Django==4.2.30 --with redshif
 uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.1.14 pytest driver_tests -q
 uv run --python 3.12 --project driver_tests --with "Django~=6.0.0" --with redshift-connector==2.1.14 pytest driver_tests -q
 uv run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshift-connector==2.1.16 pytest driver_tests -q
+uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.2.0 pytest driver_tests -q
 git diff --check
 git status --short
 ```
