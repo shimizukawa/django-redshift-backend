@@ -1,5 +1,24 @@
 # Django Redshift Backend Redesign
 
+Use Django's public backend APIs and AWS's official driver to replace the
+vendored PostgreSQL code and psycopg2 while preserving compatibility with
+existing applications.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Supported versions | Django 4.2, 5.2, 6.0, and 6.1. The driver floor is 2.1.14; 2.1.16 and 2.2.0 are also validation targets. |
+| Authentication | Username/password only in the first release. IAM and identity-provider authentication are separate follow-up work. |
+| Compatibility | Preserve the existing `ENGINE`, standard connection settings, `DistKey`/`SortKey`, and migration import paths. |
+| Upgrades | Package upgrades do not automatically alter existing tables or replay applied migrations. |
+| Implementation | Use Django's public base classes; separate Redshift-specific behavior from Django 4.2-only compatibility code. |
+
+## Read the details
+
+- **Check support requirements:** [Supported version matrix](#supported-version-matrix) and [Authentication scope](#authentication-scope).
+- **Check application impact:** [Public compatibility contract](#public-compatibility-contract) and [Database migration compatibility](#database-migration-compatibility).
+- **Review the implementation approach:** [Architecture](#architecture), [AWS driver adoption gate](#aws-driver-adoption-gate), and [Test strategy](#test-strategy).
 
 ## Context
 
