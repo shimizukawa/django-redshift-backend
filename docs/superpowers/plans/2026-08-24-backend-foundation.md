@@ -875,5 +875,4 @@ Record in the child PR body:
 - Real Redshift and alternate authentication deferred
 - No database migration or public migration-API change
 
-Update tracking PR #1's stack checklist and add a milestone comment after the
-child PR is published and GitHub Actions is green.
+Record verification results and dependency links in the PR discussion.

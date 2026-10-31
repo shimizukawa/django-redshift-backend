@@ -1,9 +1,5 @@
 # Backend Foundation Design
 
-## Status
-
-Approved in conversation on 2026-08-24. This design is the third layer of the
-stack and is based on the GO decision in `redesign/01-driver-investigation`.
 
 ## Purpose
 
