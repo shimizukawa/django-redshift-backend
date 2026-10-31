@@ -2,13 +2,90 @@
 
 **Goal:** Build an internal, database-free Redshift schema editor that supports the established Django matrix, preserves historical migration APIs, corrects future DistKey migration replay, and never repairs an existing database automatically.
 
+## Acceptance criteria
+
+| Area | Required outcome |
+| --- | --- |
+| DDL | Supported CREATE/add/alter/remove/key operations match Redshift contracts. |
+| Data safety | Default/key/recreation restrictions are explicit; general table rebuilds remain unsupported. |
+| Migration APIs | Historical key imports, deconstruction, graph/state, and SQL replay remain compatible. |
+| Django boundary | Only 4.2 uses the narrow removable adapter. |
+| Verification | Database-free corpus, supported matrix, package, and architecture gates pass. |
+
+## Verification checklist
+
+Each item states the decision gate before the detailed implementation examples.
+The references retain the commands and technical expectations for that item.
+
+### 1. Establish the common editor, Django 4.2 boundary, and Redshift type contract
+
+**Purpose:** Establish the common schema editor and narrow Django 4.2 boundary.
+
+**Pass condition:** Base-class selection, Redshift types, and literal rendering satisfy the common and version-specific contracts.
+
+**Verification:** Run base schema and type/default-rendering tests. [Implementation and commands](#reference-1-establish-the-common-editor-django-42-boundary-and-redshift-type-contract).
+
+### 2. Generate CREATE TABLE, DISTKEY, SORTKEY, and informational foreign keys
+
+**Purpose:** Generate supported table, distribution-key, sort-key, and foreign-key DDL.
+
+**Pass condition:** CREATE SQL, quoting, and table options match the Redshift contracts; unsupported declarations fail explicitly.
+
+**Verification:** Run CREATE TABLE contracts on the supported version edges. [Implementation and commands](#reference-2-generate-create-table-distkey-sortkey-and-informational-foreign-keys).
+
+### 3. Implement DistKey operations and explicit index/constraint behavior
+
+**Purpose:** Handle DistKey operations and reject unsupported indexes or constraints.
+
+**Pass condition:** Supported DistKey SQL is emitted for new application; unsupported operations are rejected without inventing database support.
+
+**Verification:** Run key, index, and constraint contracts. [Implementation and commands](#reference-3-implement-distkey-operations-and-explicit-indexconstraint-behavior).
+
+### 4. Implement AddField with persistent compatibility defaults
+
+**Purpose:** Add columns with explicit default and nullability behavior.
+
+**Pass condition:** Supported additions preserve literal defaults where required; unsupported additions fail before SQL generation.
+
+**Verification:** Run AddField contracts across the Django matrix edges. [Implementation and commands](#reference-4-implement-addfield-with-persistent-compatibility-defaults).
+
+### 5. Implement direct VARCHAR changes, focused recreation, and SORTKEY removal
+
+**Purpose:** Implement supported direct alterations and limited recreation.
+
+**Pass condition:** VARCHAR growth and permitted recreation respect key/default restrictions; SORTKEY fallback catches only the known conflict.
+
+**Verification:** Run alter-field, recreation, and SORTKEY recovery tests. [Implementation and commands](#reference-5-implement-direct-varchar-changes-focused-recreation-and-sortkey-removal).
+
+### 6. Convert the historical migration corpus into a database-free compatibility gate
+
+**Purpose:** Prove historical migrations remain usable without a database.
+
+**Pass condition:** Public imports, deconstruction, graph/state replay, SQL collection, and makemigrations checks meet compatibility contracts.
+
+**Verification:** Run the historical migration corpus and protected-API checks. [Implementation and commands](#reference-6-convert-the-historical-migration-corpus-into-a-database-free-compatibility-gate).
+
+### 7. Document upgrade behavior and run the complete release gate
+
+**Purpose:** Document upgrade semantics and verify the complete schema layer.
+
+**Pass condition:** Guidance states limits and data risks; all matrix, package, architecture, and migration gates pass without automatic database repair.
+
+**Verification:** Run the complete driver matrix, schema/migration tests, lint, and packaging checks. [Implementation and commands](#reference-7-document-upgrade-behavior-and-run-the-complete-release-gate).
+
+## Implementation reference
+
+The following scope, file map, examples, and commands support the checklist.
+Intermediate failing examples describe the implementation sequence; they are
+not the pass condition for the completed component.
+
 **Architecture:** `schema.py` inherits Django's installed `BaseDatabaseSchemaEditor` and implements focused Redshift DDL helpers instead of copying Django's `_alter_field()`. `schema_django42.py` is a deletion-oriented subclass selected only for Django 4.2, while `_backend.DatabaseWrapper` registers the new editor and explicit type mappings without activating the public engine in `base.py`. Migration-corpus tests apply operations through `collect_sql=True` without a database connection.
 
 **Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base-backend and migration APIs, `redshift-connector>=2.1.14,<3`, pytest 8, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-25-schema-migration-design.md`
 
-## Global Constraints
+### Global Constraints
 
 - Treat the current Amazon Redshift Database Developer Guide as authoritative for DDL syntax and limitations.
 - Use Django's installed `django.db.backends.base.schema.BaseDatabaseSchemaEditor`; do not import or copy Django's PostgreSQL backend or this project's `_vendor` schema code.
@@ -26,7 +103,7 @@
 - Require no AWS credentials, PostgreSQL service, `psql`, or Redshift cluster.
 - Use uv for every Python environment, test, lint, build, and packaging command.
 
-## File map
+### File map
 
 - `django_redshift_backend/schema.py`: common schema editor, Redshift DDL templates, literal rendering, table options, constraints, index dispatch, add/alter/remove field behavior, and column-recreation helpers.
 - `django_redshift_backend/schema_django42.py`: Django 4.2-only subclass and removal comment; no common Redshift behavior.
@@ -46,7 +123,7 @@
 
 ---
 
-### Task 1: Establish the common editor, Django 4.2 boundary, and Redshift type contract
+### Reference 1: Establish the common editor, Django 4.2 boundary, and Redshift type contract
 
 **Files:**
 - Create: `django_redshift_backend/schema.py`
@@ -321,7 +398,7 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all three commands pass. If Django 4.2 lacks either generated-column feature attribute on its base class, the explicit subclass attributes still make the tests pass without adding a version branch.
 
-### Task 2: Generate CREATE TABLE, DISTKEY, SORTKEY, and informational foreign keys
+### Reference 2: Generate CREATE TABLE, DISTKEY, SORTKEY, and informational foreign keys
 
 **Files:**
 - Modify: `django_redshift_backend/schema.py`
@@ -590,7 +667,7 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: both commands pass without a Django-version conditional in `schema.py`.
 
-### Task 3: Implement DistKey operations and explicit index/constraint behavior
+### Reference 3: Implement DistKey operations and explicit index/constraint behavior
 
 **Files:**
 - Modify: `django_redshift_backend/schema.py`
@@ -775,7 +852,7 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all commands pass; warnings about Django's `check` to `condition` rename are avoided by the test helper.
 
-### Task 4: Implement AddField with persistent compatibility defaults
+### Reference 4: Implement AddField with persistent compatibility defaults
 
 **Files:**
 - Modify: `django_redshift_backend/schema.py`
@@ -966,7 +1043,7 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all commands pass. Django 4.2 skips only the `db_default` and generated-field cases via capability-based `pytest.mark.skipif`, not production version checks.
 
-### Task 5: Implement direct VARCHAR changes, focused recreation, and SORTKEY removal
+### Reference 5: Implement direct VARCHAR changes, focused recreation, and SORTKEY removal
 
 **Files:**
 - Modify: `django_redshift_backend/schema.py`
@@ -1287,7 +1364,7 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all tests pass, and `rg -n "BASED FROM|django40|postgresql.schema" django_redshift_backend/schema.py django_redshift_backend/schema_django42.py` returns no matches.
 
-### Task 6: Convert the historical migration corpus into a database-free compatibility gate
+### Reference 6: Convert the historical migration corpus into a database-free compatibility gate
 
 **Files:**
 - Modify: `driver_tests/conftest.py`
@@ -1446,7 +1523,7 @@ Expected: every command passes with identical semantic SQL after digest-only nor
 
 Expected: no output.
 
-### Task 7: Document upgrade behavior and run the complete release gate
+### Reference 7: Document upgrade behavior and run the complete release gate
 
 **Files:**
 - Create: `doc/schema-migrations.rst`
@@ -1589,9 +1666,10 @@ uv run --python 3.12 --project driver_tests --with "Django~=6.1.0" --with "redsh
 uv run --python 3.13 --project driver_tests --with "Django~=6.1.0" --with "redshift-connector==2.1.14" pytest driver_tests -q
 uv run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with "redshift-connector==2.1.14" pytest driver_tests -q
 uv run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with "redshift-connector==2.1.16" pytest driver_tests -q
+uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redshift-connector==2.2.0" pytest driver_tests -q
 ```
 
-Expected: all 15 commands exit 0. Record the pass count for each cell in the PR body; do not infer unrun cells from neighboring versions.
+Expected: all 16 commands exit 0. Record the observed result for each cell in the PR discussion; do not infer unrun cells from neighboring versions.
 
 - [ ] **Step 5: Run root regression, build, packaging, and protected-file gates**
 

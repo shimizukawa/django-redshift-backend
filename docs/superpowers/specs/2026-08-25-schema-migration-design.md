@@ -1,8 +1,24 @@
 # Schema and Migration Compatibility Design
 
-**Date:** 2026-08-25
+Implement focused Redshift DDL on Django public base classes while preserving existing migration APIs and avoiding automatic database repair.
 
-**Stack parent:** `redesign/03-operations-features`
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Architecture | Keep common behavior in `schema.py` and Django 4.2-only compatibility in a removable adapter. |
+| Supported DDL | Generate supported table, column, distribution-key, and sort-key operations; reject unsupported options explicitly. |
+| Data changes | Allow supported in-place VARCHAR growth and limited non-atomic column recreation, subject to key/default restrictions. |
+| Migration compatibility | Preserve key imports and existing migration files; corrected future SQL does not replay already-applied migrations. |
+| Limits | PK/FK/UNIQUE are informational; general data-preserving table rebuilds remain follow-up work (#189). |
+
+## Read the details
+
+- **Review supported operations:** [DDL contracts](#ddl-contracts), [Error model](#error-model).
+- **Check upgrades and existing data:** [Public and migration compatibility](#public-and-migration-compatibility), [Risks and mitigations](#risks-and-mitigations).
+- **Check compatibility evidence:** [Database-free migration gate](#database-free-migration-gate), [Acceptance criteria](#acceptance-criteria).
+
+**Date:** 2026-08-25
 
 ## Context
 
