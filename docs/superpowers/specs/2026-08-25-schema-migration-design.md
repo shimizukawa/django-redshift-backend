@@ -2,8 +2,6 @@
 
 **Date:** 2026-08-25
 
-**Status:** Approved
-
 **Stack parent:** `redesign/03-operations-features`
 
 ## Context
