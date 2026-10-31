@@ -137,6 +137,7 @@ import redshift_connector
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
+
 DRIVER_RANGE = SpecifierSet(">=2.1.14,<3")
 DBAPI_EXCEPTIONS = (
     "Error",
@@ -150,18 +151,22 @@ DBAPI_EXCEPTIONS = (
     "NotSupportedError",
 )
 
+
 def test_installed_driver_is_in_proposed_range():
     assert Version(version("redshift-connector")) in DRIVER_RANGE
+
 
 def test_driver_metadata_supports_running_python():
     requires_python = SpecifierSet(metadata("redshift-connector")["Requires-Python"])
     running = ".".join(map(str, sys.version_info[:3]))
     assert requires_python.contains(running)
 
+
 def test_dbapi_module_constants_match_django_sql_contract():
     assert redshift_connector.apilevel == "2.0"
     assert redshift_connector.paramstyle == "format"
     assert redshift_connector.threadsafety == 1
+
 
 def test_dbapi_exception_namespace_is_complete():
     for name in DBAPI_EXCEPTIONS:
@@ -170,6 +175,7 @@ def test_dbapi_exception_namespace_is_complete():
     assert issubclass(redshift_connector.InterfaceError, redshift_connector.Error)
     for name in DBAPI_EXCEPTIONS[2:]:
         assert issubclass(getattr(redshift_connector, name), redshift_connector.DatabaseError)
+
 
 def test_dbapi_value_constructors_are_public():
     for name in (
@@ -237,9 +243,11 @@ from driver_tests.option_contract import (
     redact_connect_kwargs,
 )
 
+
 def test_public_connect_signature_covers_initial_password_mode():
     parameters = set(inspect.signature(redshift_connector.connect).parameters)
     assert REQUIRED_DRIVER_OPTIONS <= parameters
+
 
 def test_standard_settings_map_and_override_duplicate_options():
     settings = {
@@ -263,12 +271,14 @@ def test_standard_settings_map_and_override_duplicate_options():
         "ssl": True,
     }
 
+
 def test_dbshell_and_driver_options_are_classified_by_consumer():
     driver, dbshell = classify_options(
         {"sslmode": "verify-full", "passfile": "pgpass"}
     )
     assert driver == {"sslmode": "verify-full"}
     assert dbshell == {"sslmode": "verify-full", "passfile": "pgpass"}
+
 
 @pytest.mark.parametrize(
     "name",
@@ -277,6 +287,7 @@ def test_dbshell_and_driver_options_are_classified_by_consumer():
 def test_deferred_authentication_options_are_rejected(name):
     with pytest.raises(ValueError, match="username/password-only"):
         classify_options({name: "value"})
+
 
 @pytest.mark.parametrize(
     "settings",
@@ -299,6 +310,7 @@ def test_initial_password_mode_requires_user_and_password(settings):
     with pytest.raises(ValueError, match="required"):
         build_connect_kwargs(settings)
 
+
 @pytest.mark.parametrize(
     "name",
     ["options", "isolation_level", "cursor_factory", "connection_factory", "client_encoding"],
@@ -307,9 +319,11 @@ def test_legacy_psycopg2_options_are_rejected(name):
     with pytest.raises(ValueError, match=name):
         classify_options({name: "value"})
 
+
 def test_unknown_options_are_rejected():
     with pytest.raises(ValueError, match="unknown_option"):
         classify_options({"unknown_option": True})
+
 
 def test_credentials_are_redacted_without_changing_non_secrets():
     values = {
@@ -355,6 +369,7 @@ Create `driver_tests/option_contract.py`:
 import inspect
 
 import redshift_connector
+
 
 STANDARD_SETTING_MAP = {
     "NAME": "database",
@@ -444,6 +459,7 @@ SENSITIVE_OPTIONS = {
     "token",
 }
 
+
 def classify_options(options):
     public_driver_options = set(inspect.signature(redshift_connector.connect).parameters)
     driver = {}
@@ -467,6 +483,7 @@ def classify_options(options):
             raise ValueError(f"Unknown database option: {name}")
     return driver, dbshell
 
+
 def build_connect_kwargs(settings_dict):
     driver, _ = classify_options(settings_dict.get("OPTIONS", {}))
     for setting_name, driver_name in (("USER", "user"), ("PASSWORD", "password")):
@@ -481,6 +498,7 @@ def build_connect_kwargs(settings_dict):
         if value not in (None, ""):
             driver[driver_name] = int(value) if setting_name == "PORT" else value
     return driver
+
 
 def redact_connect_kwargs(kwargs):
     return {
@@ -522,6 +540,7 @@ import redshift_connector
 from django import db
 from django.db.utils import DatabaseErrorWrapper
 
+
 EXCEPTION_NAMES = (
     "Error",
     "InterfaceError",
@@ -534,9 +553,11 @@ EXCEPTION_NAMES = (
     "NotSupportedError",
 )
 
+
 class Wrapper:
     Database = redshift_connector
     errors_occurred = False
+
 
 @pytest.mark.parametrize("name", EXCEPTION_NAMES)
 def test_django_translates_public_driver_exception(name):
@@ -591,8 +612,10 @@ import inspect
 
 import redshift_connector
 
+
 def parameter_names(member):
     return tuple(inspect.signature(member).parameters)
+
 
 def test_connection_exposes_required_synchronous_methods():
     connection = redshift_connector.Connection
@@ -608,6 +631,7 @@ def test_connection_exposes_required_synchronous_methods():
         "traceback",
     )
 
+
 def test_cursor_exposes_required_dbapi_surface():
     cursor = redshift_connector.Cursor
     assert parameter_names(cursor.execute)[:3] == ("self", "operation", "args")
@@ -618,6 +642,7 @@ def test_cursor_exposes_required_dbapi_surface():
     assert parameter_names(cursor.close) == ("self",)
     assert isinstance(cursor.description, property)
     assert isinstance(cursor.rowcount, property)
+
 
 def test_named_server_side_cursor_is_not_a_public_driver_contract():
     assert "name" not in inspect.signature(redshift_connector.Connection.cursor).parameters
@@ -840,4 +865,4 @@ git status --short
 ```
 
 Expected: every test command passes, `git diff --check` is silent, and status
-lists only the completed report before it is committed.
+lists only the intended report changes.
