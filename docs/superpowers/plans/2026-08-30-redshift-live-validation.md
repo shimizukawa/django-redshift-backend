@@ -82,10 +82,12 @@ import pytest
 
 from cdk_app.config import ValidationConfig, validate_allowed_cidr
 
+
 @pytest.mark.parametrize("value", ["0.0.0.0/0", "203.0.113.0/24", "::1/128", "invalid"])
 def test_allowed_cidr_requires_public_ipv4_host(value):
     with pytest.raises(ValueError, match="public IPv4 /32"):
         validate_allowed_cidr(value)
+
 
 def test_environment_supplies_password():
     environ = {
@@ -239,6 +241,7 @@ uv run --directory examples/cdk ruff check .
 git diff --check
 ```
 
+
 ### Task 4: Plain CDK Deploy and Destroy Contract
 
 **Files:**
@@ -287,6 +290,7 @@ Run:
 uv run --directory examples/cdk python -m pytest tests/test_app.py -q
 uv run --directory examples/cdk ruff check .
 ```
+
 
 ### Task 5: Operator Guide and Release Evidence Template
 
