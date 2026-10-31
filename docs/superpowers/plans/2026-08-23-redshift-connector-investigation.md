@@ -77,7 +77,7 @@ pytest, `redshift_connector` 2.1.14 and 2.1.16, GitHub Actions.
 - Produces: `uv run --project driver_tests ...` as the command prefix used by
   every later task.
 
-- [ ] **Step 1: Create the child branch from the approved parent**
+- [ ] **Step 1: Create the child branch from the design layer**
 
 ```powershell
 git switch redesign/00-plan
@@ -786,7 +786,7 @@ git commit -m "ci: add Redshift driver contract matrix"
 **Files:**
 - Create: `docs/superpowers/research/2026-08-23-redshift-connector-investigation.md`
 - Modify: `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
-  only if the result is NO-GO or evidence changes an approved assumption.
+  only if the result is NO-GO or evidence changes a design assumption.
 
 **Interfaces:**
 - Consumes: test results, uv lock metadata, official AWS documentation, AWS's
@@ -922,46 +922,9 @@ git commit -m "docs: record Redshift driver adoption decision"
 If NO-GO changed the parent design, stage that design file in the same decision
 commit and explain the design change in the commit body.
 
-- [ ] **Step 5: Push and open the stacked child PR**
+- [ ] **Step 5: Prepare the driver investigation for review**
 
-```powershell
-git push --set-upstream origin redesign/01-driver-investigation
-$decision = (Select-String -Path docs/superpowers/research/2026-08-23-redshift-connector-investigation.md -Pattern '^Decision: (GO|NO-GO)$').Matches[0].Groups[1].Value
-$prBody = @'
-## Scope
-
-Investigate AWS's public `redshift_connector` DB-API as the first child of #1.
-This PR does not activate the redesigned backend.
-
-## Decision
-
-**DECISION_VALUE** — see the checked-in investigation report for measured evidence,
-the option crosswalk, security and dependency review, and deferred
-real-Redshift checks.
-
-## Acceptance criteria
-
-- Public DB-API, username/password connection, cursor, exception, and option
-  contracts are tested; alternate authentication is explicitly deferred.
-- Django 4.2, 5.2, 6.0, and 6.1 compatibility jobs are blocking; the Django
-  4.2 jobs use the reproducible test pin 4.2.30.
-- Both the 2.1.14 security floor and investigated 2.1.16 release are covered.
-- No private driver API or psycopg2 compatibility adapter is required.
-
-## Parent
-
-https://github.com/shimizukawa/django-redshift-backend/pull/1
-'@
-$prBody = $prBody.Replace('DECISION_VALUE', $decision)
-$childUrl = gh pr create --repo shimizukawa/django-redshift-backend --base redesign/00-plan --head shimizukawa:redesign/01-driver-investigation --title "Redesign 1/7: investigate AWS Redshift driver" --body $prBody
-gh stack link $childUrl --parent https://github.com/shimizukawa/django-redshift-backend/pull/1
-```
-
-After GitHub Actions finishes, edit the PR verification section to include each
-blocking job result and its test count. Do not commit a temporary PR body file.
-
-- [ ] **Step 6: Update the tracking PR**
-
-Edit PR #1's current-status and stack sections, then append a progress comment
-containing the child PR URL, commit, decision, driver constraint, CI result,
-deferred checks, and whether the next layer is unblocked.
+Describe the public DB-API investigation, password-only authentication scope,
+GO/NO-GO decision, and supported-version contracts in the PR. Link the parent
+design by its current PR URL. Record command output, CI results, and progress
+in the PR discussion; keep repository plans independent of PR numbers.

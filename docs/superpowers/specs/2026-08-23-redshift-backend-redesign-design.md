@@ -1,9 +1,5 @@
 # Django Redshift Backend Redesign
 
-## Status
-
-Approved for planning on 2026-08-23. The stacked implementation and the
-human-operated real-Redshift release gate were completed in September 2026.
 
 ## Context
 
@@ -317,7 +313,7 @@ The migration gate is database-free and executable in normal CI. It:
 4. Applies each schema operation to a schema editor with `collect_sql=True`
    without opening a database connection.
 5. Compares normalized generated SQL with checked-in expected SQL and an
-   explicit manifest of approved semantic differences.
+   explicit manifest of intentional semantic differences.
 
 Existing migrations and representative models form a migration corpus. Tests
 compare SQL produced by the current and redesigned implementations and classify
@@ -351,7 +347,7 @@ or limitation that the redesign fixes.
 - SQL generation golden tests for DDL and ORM queries.
 - Existing migration tests adapted to the supported Django APIs.
 - Migration-corpus and schema golden tests on every supported Django minor,
-  with any approved version-specific SQL difference recorded explicitly.
+  with any intentional version-specific SQL difference recorded explicitly.
 - Database-free `collect_sql=True` and `sqlmigrate`-equivalent tests.
 - Migration import, deconstruction, graph, plan, and `makemigrations --check`
   tests. Migration graph and SQL collection must not query applied-migration
@@ -386,44 +382,13 @@ must state that the first redesigned release supports username/password only.
 - Unsupported test database creation, cloning, or `dbshell` configurations fail
   explicitly and are documented.
 
-## Stacked pull request delivery
+## Implementation layers
 
-All branches are pushed to `shimizukawa/django-redshift-backend` so GitHub's
-same-repository stacked pull request requirement is satisfied. The stack is:
-
-1. `redesign/00-plan`: this design, roadmap, and tracking parent; no runtime
-   change.
-2. `redesign/01-driver-investigation`: driver evidence, contract tests, settings
-   mapping prototype, and GO/NO-GO decision.
-3. `redesign/02-backend-foundation`: independent wrapper, driver boundary,
-   connection lifecycle, client, and creation contracts without activating the
-   new backend entry point.
-4. `redesign/03-operations-features`: operations, conservative features, and
-   #171 regression coverage.
-5. `redesign/04-schema-migrations`: schema editor, migration corpus, SQL
-   comparison, and no-database-migration gates.
-6. `redesign/05-introspection`: catalog queries and `inspectdb` behavior.
-7. `redesign/06-activate-cleanup-release`: activate the new entry point, remove
-   vendored Django and psycopg2, update the test matrix and documentation, and
-   prepare the major release.
-
-Each branch is based on the branch immediately below it. Every pull request must
-pass CI and contain a focused diff. Changes committed to a lower branch require
-a cascading rebase of all branches above it.
-
-### Progress recording
-
-The `00-plan` pull request is the authoritative status page:
-
-- Its body is edited in place with the current stack checklist, current phase,
-  decisions, risks, and links.
-- Milestone results, GO/NO-GO decisions, blockers, compatibility findings,
-  completed review layers, and cascading rebases are appended as comments.
-- Progress-only updates do not modify this design document.
-- A changed architectural decision updates this document in `00-plan`, followed
-  by a cascading rebase.
-- Child pull requests contain their own scope, acceptance criteria, tests, and
-  dependency links.
+The design separates driver investigation, connection handling, operations and
+features, schema and migration compatibility, introspection, public activation,
+and disposable live validation. Each layer has focused contracts and depends on
+the preceding layer. PR links, review status, CI results, and delivery history
+belong in the PR discussion rather than this specification.
 
 ## Completion criteria
 
@@ -444,7 +409,6 @@ The redesign is complete when:
   removed.
 - Documentation states all breaking changes and that the initial redesigned
   release supports username/password authentication only.
-- The release gate has passed against Redshift Serverless with both example
-  projects, and the temporary CloudFormation stack, workgroup, namespace, and
-  snapshots have been removed. Alternate-authentication work is recorded in a
-  follow-up issue.
+- The release gate must cover both example projects against Redshift Serverless
+  and verify removal of the temporary CloudFormation stack, workgroup,
+  namespace, and snapshots. Alternate authentication remains follow-up work.
