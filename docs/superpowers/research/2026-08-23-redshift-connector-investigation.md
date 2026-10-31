@@ -1,5 +1,21 @@
 # AWS Redshift Connector Investigation
 
+## Adoption at a glance
+
+| Area | Decision |
+| --- | --- |
+| Outcome | GO for public driver APIs with username/password authentication. |
+| Requirement | `redshift-connector>=2.1.14,<3`; compatibility targets include 2.1.14, 2.1.16, and 2.2.0. |
+| Boundary | No private driver API, psycopg2 adapter, or activation of the public backend in this layer. |
+| Evidence | Offline contracts establish API/settings compatibility; live evidence is version- and scenario-specific. |
+| Deferred scope | IAM, profile, and identity-provider authentication remain unsupported. |
+
+## Read the details
+
+- **Review adoption:** [Decision](#decision) and [Candidate and proposed constraint](#candidate-and-proposed-constraint).
+- **Check the dependency evidence:** [Maintenance, license, security, and dependencies](#maintenance-license-security-and-dependencies).
+- **Check connection behavior:** [Connection option crosswalk](#connection-option-crosswalk) and [Explicit limitations and deferred integration checks](#explicit-limitations-and-deferred-integration-checks).
+
 ## Decision
 
 Decision: GO
@@ -167,8 +183,7 @@ driver options because they do not select an authentication mode by themselves.
 cursors must initially use an ordinary cursor or be explicitly marked
 unsupported.
 
-The following behavior remains unverified until a real Redshift service is
-available: parameter binding; round trips for UUID, Decimal, date, time,
+These AWS-free contracts alone do not verify: parameter binding; round trips for UUID, Decimal, date, time,
 datetime, timezone, Boolean, JSON, NULL, Redshift-specific, and unknown types;
 savepoint SQL; actual `execute()`, `executemany()`, fetch, and result-metadata
 behavior; connection health after a network failure; and `CONN_MAX_AGE`.
@@ -180,7 +195,8 @@ integration work before their denylist entries can be removed.
 AWS's public examples state that autocommit is off by default and demonstrate
 setting `Connection.autocommit`. They also demonstrate connection and cursor
 context managers. The public surface exists in both investigated driver
-versions, but these behaviors were not integration-tested here.
+versions. Version-qualified manual integration evidence is recorded separately;
+it must not be inferred from the public-surface checks in this report.
 
 ## Verification coverage
 
