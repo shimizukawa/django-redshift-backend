@@ -1,5 +1,21 @@
 # Activation and 6.0 Release Design
 
+Activate the official Redshift driver behind the existing public ENGINE and publish the 6.0 compatibility and migration guidance.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Activation | Re-export the internal wrapper through `base.py`; retain historical key and migration imports. |
+| Removal | Remove psycopg2 and the vendored backend; keep focused Redshift components and Django 4.2 adapters. |
+| Dependencies | Declare `django>=4.2` and `redshift-connector>=2.1.14,<3`; test supported Django/Python combinations and driver targets. |
+| Upgrade behavior | Do not create/apply migrations or modify existing tables automatically; preserve the password-only authentication scope. |
+
+## Read the details
+
+- **Review activation and removal:** [Activation and removal](#activation-and-removal).
+- **Check release requirements:** [Metadata and verification](#metadata-and-verification).
+
 ## Goal
 
 Deliver 6.0.0 by activating the AWS `redshift_connector` backend behind the
