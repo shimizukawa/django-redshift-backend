@@ -1,7 +1,5 @@
 # AWS Redshift Connector Investigation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Produce a reviewable GO/NO-GO decision for adopting AWS's public
 `redshift_connector` DB-API without activating the redesigned backend.
 
@@ -18,8 +16,6 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 
 ## Global Constraints
 
-- Start `redesign/01-driver-investigation` from `redesign/00-plan`; its PR base
-  is `redesign/00-plan`.
 - Use uv for every environment, dependency, and test command.
 - Do not import or depend on a private `redshift_connector` module or member.
 - Do not open a socket or require AWS credentials in normal CI.
@@ -77,13 +73,6 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 - Produces: `uv run --project driver_tests ...` as the command prefix used by
   every later task.
 
-- [ ] **Step 1: Create the child branch from the design layer**
-
-```powershell
-git switch redesign/00-plan
-git switch -c redesign/01-driver-investigation
-```
-
 - [ ] **Step 2: Verify that the isolated project does not exist yet**
 
 Run:
@@ -125,13 +114,6 @@ Expected: the lock succeeds and the command prints the version selected by
 the committed lockfile. Explicit version overrides below verify all three
 compatibility targets independently of the lockfile default.
 
-- [ ] **Step 5: Commit the harness**
-
-```powershell
-git add driver_tests/pyproject.toml driver_tests/uv.lock driver_tests/__init__.py
-git commit -m "test: add isolated Redshift driver harness"
-```
-
 ### Task 2: Package Metadata and DB-API Contract
 
 **Files:**
@@ -155,7 +137,6 @@ import redshift_connector
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
-
 DRIVER_RANGE = SpecifierSet(">=2.1.14,<3")
 DBAPI_EXCEPTIONS = (
     "Error",
@@ -169,22 +150,18 @@ DBAPI_EXCEPTIONS = (
     "NotSupportedError",
 )
 
-
 def test_installed_driver_is_in_proposed_range():
     assert Version(version("redshift-connector")) in DRIVER_RANGE
-
 
 def test_driver_metadata_supports_running_python():
     requires_python = SpecifierSet(metadata("redshift-connector")["Requires-Python"])
     running = ".".join(map(str, sys.version_info[:3]))
     assert requires_python.contains(running)
 
-
 def test_dbapi_module_constants_match_django_sql_contract():
     assert redshift_connector.apilevel == "2.0"
     assert redshift_connector.paramstyle == "format"
     assert redshift_connector.threadsafety == 1
-
 
 def test_dbapi_exception_namespace_is_complete():
     for name in DBAPI_EXCEPTIONS:
@@ -193,7 +170,6 @@ def test_dbapi_exception_namespace_is_complete():
     assert issubclass(redshift_connector.InterfaceError, redshift_connector.Error)
     for name in DBAPI_EXCEPTIONS[2:]:
         assert issubclass(getattr(redshift_connector, name), redshift_connector.DatabaseError)
-
 
 def test_dbapi_value_constructors_are_public():
     for name in (
@@ -229,13 +205,6 @@ uv run --project driver_tests --with redshift-connector==2.1.14 pytest driver_te
 
 Expected: all four tests PASS.
 
-- [ ] **Step 4: Commit the DB-API contract**
-
-```powershell
-git add driver_tests/test_metadata_contract.py
-git commit -m "test: record Redshift driver DB-API contract"
-```
-
 ### Task 3: Connection Option Crosswalk Prototype
 
 **Files:**
@@ -268,11 +237,9 @@ from driver_tests.option_contract import (
     redact_connect_kwargs,
 )
 
-
 def test_public_connect_signature_covers_initial_password_mode():
     parameters = set(inspect.signature(redshift_connector.connect).parameters)
     assert REQUIRED_DRIVER_OPTIONS <= parameters
-
 
 def test_standard_settings_map_and_override_duplicate_options():
     settings = {
@@ -296,14 +263,12 @@ def test_standard_settings_map_and_override_duplicate_options():
         "ssl": True,
     }
 
-
 def test_dbshell_and_driver_options_are_classified_by_consumer():
     driver, dbshell = classify_options(
         {"sslmode": "verify-full", "passfile": "pgpass"}
     )
     assert driver == {"sslmode": "verify-full"}
     assert dbshell == {"sslmode": "verify-full", "passfile": "pgpass"}
-
 
 @pytest.mark.parametrize(
     "name",
@@ -312,7 +277,6 @@ def test_dbshell_and_driver_options_are_classified_by_consumer():
 def test_deferred_authentication_options_are_rejected(name):
     with pytest.raises(ValueError, match="username/password-only"):
         classify_options({name: "value"})
-
 
 @pytest.mark.parametrize(
     "settings",
@@ -335,7 +299,6 @@ def test_initial_password_mode_requires_user_and_password(settings):
     with pytest.raises(ValueError, match="required"):
         build_connect_kwargs(settings)
 
-
 @pytest.mark.parametrize(
     "name",
     ["options", "isolation_level", "cursor_factory", "connection_factory", "client_encoding"],
@@ -344,11 +307,9 @@ def test_legacy_psycopg2_options_are_rejected(name):
     with pytest.raises(ValueError, match=name):
         classify_options({name: "value"})
 
-
 def test_unknown_options_are_rejected():
     with pytest.raises(ValueError, match="unknown_option"):
         classify_options({"unknown_option": True})
-
 
 def test_credentials_are_redacted_without_changing_non_secrets():
     values = {
@@ -394,7 +355,6 @@ Create `driver_tests/option_contract.py`:
 import inspect
 
 import redshift_connector
-
 
 STANDARD_SETTING_MAP = {
     "NAME": "database",
@@ -484,7 +444,6 @@ SENSITIVE_OPTIONS = {
     "token",
 }
 
-
 def classify_options(options):
     public_driver_options = set(inspect.signature(redshift_connector.connect).parameters)
     driver = {}
@@ -508,7 +467,6 @@ def classify_options(options):
             raise ValueError(f"Unknown database option: {name}")
     return driver, dbshell
 
-
 def build_connect_kwargs(settings_dict):
     driver, _ = classify_options(settings_dict.get("OPTIONS", {}))
     for setting_name, driver_name in (("USER", "user"), ("PASSWORD", "password")):
@@ -523,7 +481,6 @@ def build_connect_kwargs(settings_dict):
         if value not in (None, ""):
             driver[driver_name] = int(value) if setting_name == "PORT" else value
     return driver
-
 
 def redact_connect_kwargs(kwargs):
     return {
@@ -542,14 +499,7 @@ uv run --project driver_tests --with redshift-connector==2.1.16 pytest driver_te
 uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tests/test_connect_options.py -v
 ```
 
-Expected: all parameterized cases PASS for both releases.
-
-- [ ] **Step 5: Commit the crosswalk prototype**
-
-```powershell
-git add driver_tests/option_contract.py driver_tests/test_connect_options.py
-git commit -m "test: prototype Redshift connection option crosswalk"
-```
+Expected: all parameterized cases PASS for all three driver versions.
 
 ### Task 4: Django Exception Translation Contract
 
@@ -572,7 +522,6 @@ import redshift_connector
 from django import db
 from django.db.utils import DatabaseErrorWrapper
 
-
 EXCEPTION_NAMES = (
     "Error",
     "InterfaceError",
@@ -585,11 +534,9 @@ EXCEPTION_NAMES = (
     "NotSupportedError",
 )
 
-
 class Wrapper:
     Database = redshift_connector
     errors_occurred = False
-
 
 @pytest.mark.parametrize("name", EXCEPTION_NAMES)
 def test_django_translates_public_driver_exception(name):
@@ -624,13 +571,6 @@ uv run --python 3.12 --project driver_tests --with "Django~=6.1.0" pytest driver
 
 Expected: all nine cases PASS on both Django versions.
 
-- [ ] **Step 4: Commit the Django exception contract**
-
-```powershell
-git add driver_tests/test_django_exceptions.py
-git commit -m "test: verify Django maps Redshift driver exceptions"
-```
-
 ### Task 5: Public Connection, Cursor, and Type Surface
 
 **Files:**
@@ -651,10 +591,8 @@ import inspect
 
 import redshift_connector
 
-
 def parameter_names(member):
     return tuple(inspect.signature(member).parameters)
-
 
 def test_connection_exposes_required_synchronous_methods():
     connection = redshift_connector.Connection
@@ -670,7 +608,6 @@ def test_connection_exposes_required_synchronous_methods():
         "traceback",
     )
 
-
 def test_cursor_exposes_required_dbapi_surface():
     cursor = redshift_connector.Cursor
     assert parameter_names(cursor.execute)[:3] == ("self", "operation", "args")
@@ -681,7 +618,6 @@ def test_cursor_exposes_required_dbapi_surface():
     assert parameter_names(cursor.close) == ("self",)
     assert isinstance(cursor.description, property)
     assert isinstance(cursor.rowcount, property)
-
 
 def test_named_server_side_cursor_is_not_a_public_driver_contract():
     assert "name" not in inspect.signature(redshift_connector.Connection.cursor).parameters
@@ -699,13 +635,6 @@ uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tes
 
 Expected: all three tests PASS. The named-cursor test records an explicit
 limitation rather than a failure.
-
-- [ ] **Step 3: Commit the public-surface contract**
-
-```powershell
-git add driver_tests/test_connection_cursor_contract.py
-git commit -m "test: record Redshift connection and cursor surface"
-```
 
 ### Task 6: AWS-Free Compatibility Matrix
 
@@ -778,14 +707,7 @@ uv run --python 3.14 --project driver_tests --with "Django~=6.1.0" --with redshi
 uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift-connector==2.2.0 pytest driver_tests -q
 ```
 
-Expected: all tests PASS in all three representative environments.
-
-- [ ] **Step 3: Commit the matrix**
-
-```powershell
-git add .github/workflows/driver-contract.yml
-git commit -m "ci: add Redshift driver contract matrix"
-```
+Expected: all tests PASS in all four representative environments.
 
 ### Task 7: Evidence Report and GO/NO-GO Gate
 
@@ -798,7 +720,7 @@ git commit -m "ci: add Redshift driver contract matrix"
 - Consumes: test results, uv lock metadata, official AWS documentation, AWS's
   driver repository/changelog, and published security advisories.
 - Produces: one explicit `Decision: GO` or `Decision: NO-GO` and the evidence
-  needed by `redesign/02-backend-foundation`.
+  needed by the connection-foundation layer.
 
 - [ ] **Step 1: Write the evidence report with measured results**
 
@@ -818,7 +740,7 @@ every must-pass item below passes. Otherwise it must be exactly
 - Compatibility targets: 2.1.14 (minimum), 2.1.16, and 2.2.0.
 - Security floor: 2.1.14, which contains the fix for GHSA-29h4-r29x-hchv.
 - Runtime constraint: `redshift-connector>=2.1.14,<3`.
-- Python metadata: `Requires-Python >=3.8`; CI verifies the project's 3.10-3.14 matrix.
+- Record each target's Python metadata; CI verifies the project's 3.10-3.14 matrix.
 
 ## Maintenance, license, security, and dependencies
 
@@ -901,7 +823,7 @@ Expected NO-GO condition: any mandatory exception, parameter style,
 username/password connection option, supported-version job, or license/security
 requirement fails. Deferred alternate-authentication parameters do not produce
 NO-GO. Record NO-GO, update the parent design, and do not create
-`redesign/02-backend-foundation`.
+the connection-foundation layer.
 
 - [ ] **Step 3: Run final verification**
 
@@ -919,20 +841,3 @@ git status --short
 
 Expected: every test command passes, `git diff --check` is silent, and status
 lists only the completed report before it is committed.
-
-- [ ] **Step 4: Commit the decision**
-
-```powershell
-git add docs/superpowers/research/2026-08-23-redshift-connector-investigation.md
-git commit -m "docs: record Redshift driver adoption decision"
-```
-
-If NO-GO changed the parent design, stage that design file in the same decision
-commit and explain the design change in the commit body.
-
-- [ ] **Step 5: Prepare the driver investigation for review**
-
-Describe the public DB-API investigation, password-only authentication scope,
-GO/NO-GO decision, and supported-version contracts in the PR. Link the parent
-design by its current PR URL. Record command output, CI results, and progress
-in the PR discussion; keep repository plans independent of PR numbers.
