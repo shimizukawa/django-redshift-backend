@@ -25,30 +25,14 @@ it does not replace the original 2.1.14/2.1.16 investigation or its live results
 Source: [AWS changelog](https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md)
 and the installed 2.2.0 wheel's `importlib.metadata.requires()` output.
 
-## AWS-free verification
+## Verification requirements
 
-Executed on Windows with Python 3.12.15 and Django 5.2.8:
+The public DB-API, connection and cursor signatures, exception mapping, and
+password-only settings contracts must hold for 2.2.0. The supported-version
+matrix includes a blocking connector 2.2.0 cell alongside the driver floor.
+Per-run results are recorded in the PR discussion.
 
-```powershell
-uv run --project driver_tests --python 3.12 --with Django==5.2.8 --with redshift-connector==2.2.0 pytest driver_tests -q
-```
-
-- PR #2 layer: 91 passed. Public DB-API, cursor/metadata signatures,
-  username/password option mapping, and existing authentication rejections pass.
-- Complete stack before this follow-up: 381 passed, 2 skipped.
-- CI retains all 15 original cells and adds a blocking Python 3.12 / Django
-  5.2.8 / connector 2.2.0 cell, which runs each PR's complete driver suite.
-
-The installed public `connect()` signature still exposes the required
-password-connection parameters. No production change was needed for the
-AWS-free contracts exercised here.
-
-## Remaining integration evidence
-
-The existing real-Redshift evidence applies to its recorded driver version,
-not automatically to 2.2.0. A human-operated CDK session must still check
-TLS connection, ORM round trips, repeated metadata calls, and `inspectdb`
-with 2.2.0. Controlled TLS hostname-mismatch and untrusted-certificate cases
-also remain pending. See the differential-validation section in
-`examples/cdk/README.md` in the live-validation layer. No AWS resources were
-created for this follow-up's offline checks.
+Real-Redshift validation must cover TLS connection, ORM round trips, repeated
+metadata calls, and `inspectdb`. Controlled TLS checks must cover hostname
+mismatch and untrusted certificates. The live-validation layer documents the
+operator procedure and version-qualified integration evidence separately.
