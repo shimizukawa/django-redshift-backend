@@ -368,12 +368,11 @@ Inspect every match and confirm it is an instruction or redaction warning, not a
 
 Commit: `git commit -am "docs: add live Redshift release runbook"` after staging new files.
 
-### Task 6: AWS-Free CI, Final Verification, and Stacked PR Recording
+### Task 6: AWS-Free CI and Final Verification
 
 **Files:**
 - Create: `.github/workflows/live-validation-contract.yml`
 - Modify: `docs/superpowers/plans/2026-08-30-redshift-live-validation.md`
-- Modify: PR #9 and tracking PR #1; do not create temporary PR-body files.
 
 **Interfaces:**
 - Consumes: the complete isolated CDK project and operator documentation.
@@ -408,43 +407,12 @@ git status --short
 
 Expected: all tests, lint, package checks, and diff checks pass; status contains only the plan checkbox/result updates before the final commit.
 
-- [x] **Step 3: Record measured results in this plan and commit**
+- [ ] **Step 3: Record verification in the PR discussion**
 
-Mark completed checkboxes and append exact command versions and test counts. Do not claim a real Redshift pass; label it pending human execution.
-
-Commit:
-
-```powershell
-git add .github/workflows/live-validation-contract.yml docs/superpowers/plans/2026-08-30-redshift-live-validation.md
-git commit -m "ci: verify live validation contracts without AWS"
-```
-
-- [ ] **Step 4: Push the stacked branch and update PR #9**
-
-Push `redesign/07-live-validation` without force. Confirm PR #9 still targets `redesign/06-activate-cleanup-release`. Update its summary, review focus, verification counts, and explicit statement that the real AWS run remains a manual pre-release gate.
-
-- [ ] **Step 5: Update tracking PR #1**
-
-Add #9 to the stack, replace stale current-status text, and append a progress comment containing branch, head commit, AWS-free CI results, fixed-environment credential decision, deferred human live-run status, and release-blocking cleanup requirement.
+Describe the infrastructure, credential contract, operator runbook, and AWS-free
+checks in the PR. Record measured versions, test results, and delivery status in
+its discussion. Distinguish offline verification from a human-operated live run.
 
 - [ ] **Step 6: Stop before AWS deployment**
 
 Report the exact reviewed operator command sequence. A human must separately choose the AWS account/Region, confirm current pricing and permissions, set `DB_PASSWORD`, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
-
-## Implementation Results
-
-- Python CDK project and lock completed with uv 0.11.29 and Python 3.12.
-- AWS-free CDK contract suite: 20 passed in 50.08 seconds after removing the
-  expiration-variable contract.
-- CDK project Ruff check: passed.
-- Full backend tox matrix: 14 Python/Django environments passed; lint and
-  package checks passed in 425.08 seconds. Django 4.2 environments reported
-  349 passed/13 skipped each; Django 5.2, 6.0, and 6.1 environments reported
-  362 passed/2 skipped each.
-- Wheel and sdist passed Twine validation as part of the tox `check`
-  environment.
-- Local plain `cdk synth` was not run because the CDK CLI is not installed on
-  this workstation. Template synthesis is exercised by the 20 AWS-free tests;
-  installing CDK CLI v2 remains an operator prerequisite.
-- Real Redshift deployment, validation, and destruction: pending explicit
-  human execution before release.

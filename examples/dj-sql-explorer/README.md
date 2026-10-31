@@ -38,4 +38,4 @@ For disposable validation environments only, verify the affected table has no
 rows, recreate it from the target migration state, and fake-apply that migration
 before continuing. Never use this workaround when either table contains data.
 General, data-preserving table rebuild support is tracked in
-[django-redshift-backend#189](https://github.com/jazzband/django-redshift-backend/issues/189).
+[django-redshift-backend#189](https://github.com/shimizukawa/django-redshift-backend/issues/189).

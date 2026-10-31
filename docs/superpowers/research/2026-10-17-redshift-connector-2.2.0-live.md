@@ -3,7 +3,7 @@
 ## Environment and outcome
 
 Executed on 2026-10-17 against the human-deployed disposable Redshift Serverless
-environment in ap-northeast-1, using the activated stacked backend at 7b41a10.
+environment in ap-northeast-1, using the activated backend.
 Both examples used Python 3.12.15, Django 6.1.1, and explicitly selected
 `redshift-connector==2.2.0`; django-sql-explorer was 5.3. No production backend
 change was required. The earlier 2.1.16 evidence remains valid for its version.
@@ -105,4 +105,4 @@ The generated `examples/cdk/cdk.out` assembly containing the temporary password
 was removed. The human-maintained ignored Explorer `.env` was preserved; its
 connection settings now refer to the deleted validation environment. Temporary
 credential-aware probe scripts were removed, and both example lockfiles were
-unchanged. PR #9's 59 CI checks passed before this cleanup-record update.
+unchanged.
