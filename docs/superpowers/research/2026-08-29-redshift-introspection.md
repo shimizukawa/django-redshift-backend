@@ -4,8 +4,9 @@
 
 The internal backend uses the AWS-maintained `redshift_connector` metadata API
 instead of copying the legacy PostgreSQL catalog queries. The API supplies
-`get_tables()`, `get_columns()`, `get_primary_keys()`, and
-`get_imported_keys()`.
+`get_columns()`, `get_primary_keys()`, and `get_imported_keys()`.
+Current-schema table/view discovery uses `SVV_TABLES`, including external
+tables and comments, with explicit schema isolation.
 
 AWS recommends this driver API because it insulates application integrations
 from Redshift system-catalog changes:
@@ -34,7 +35,8 @@ them.
 
 - [Table constraints](https://docs.aws.amazon.com/redshift/latest/dg/t_Defining_constraints.html)
 
-No live Redshift cluster is available for this stack. The tests verify the AWS
-driver method boundary and Django result shaping with mock cursors. Validating
-those documented contracts against a provisioned Redshift cluster remains a
-future integration-testing issue.
+AWS-free tests verify catalog SQL, public driver calls, schema scoping, and
+Django result shaping. Recorded manual Redshift validation covers ordinary
+tables and inspectdb in both examples; its versions and limits are recorded
+separately. External-table discovery is covered by catalog contracts, without
+a provisioned S3/Glue live fixture.

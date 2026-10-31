@@ -1,5 +1,23 @@
 # Redshift Introspection Design
 
+Expose current-schema Redshift metadata through Django introspection and `inspectdb`, without activating the public backend in this layer.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Discovery | Read base tables, external tables, views, and comments from `SVV_TABLES` in the current schema. |
+| Columns and keys | Use public driver metadata APIs for columns, PKs, and FKs; use a narrow parameterized information-schema query for UNIQUE. |
+| Conversion | Map Redshift types and identity metadata to Django fields; retain Django's unknown-type fallback. |
+| Django compatibility | Isolate the Django 4.2 relation tuple in a removable adapter; share the common implementation on later supported versions. |
+| Validation limits | Keep schema/imports unchanged; external-table discovery has a catalog contract but no provisioned S3/Glue live fixture. |
+
+## Read the details
+
+- **Review metadata boundaries:** [Metadata sources](#metadata-sources), [Conversion rules](#conversion-rules).
+- **Check compatibility:** [Django version boundary](#django-version-boundary), [Compatibility and migration policy](#compatibility-and-migration-policy).
+- **Check verification scope:** [Tests](#tests).
+
 ## Goal
 
 Implement the Redshift-specific introspection layer used by the internal
@@ -28,10 +46,10 @@ the activation layer.
 
 ## Metadata sources
 
-The primary metadata interface is the AWS-maintained `redshift_connector`
-cursor API:
+Metadata combines a focused Redshift catalog query with the public
+`redshift_connector` cursor API:
 
-- `get_tables()` for table and view discovery;
+- `SVV_TABLES` for current-schema base tables, external tables, views, and comments;
 - `get_columns()` for column descriptions and identity metadata;
 - `get_primary_keys()` for primary-key metadata;
 - `get_imported_keys()` for foreign-key metadata.
@@ -67,10 +85,11 @@ not modifying the common implementation.
 
 ## Conversion rules
 
-`get_tables()` converts the driver's `TABLE` and `VIEW` result categories into
-Django `TableInfo` values of `t` and `v`, retaining the driver remarks as table
-comments. Unsupported table categories are excluded from the normal
-`inspectdb` set.
+`get_table_list()` queries `SVV_TABLES` with `table_schema = current_schema()`.
+`BASE TABLE` and `EXTERNAL TABLE` become Django `TableInfo` values of `t`;
+`VIEW` becomes `v`. Remarks are retained as table comments. Column and key
+metadata calls also use the current schema, preventing same-named tables in
+other schemas from contaminating results.
 
 `get_columns()` converts its JDBC-shaped rows into Django `FieldInfo` values.
 The type code is the driver-supplied Redshift type name, so the backend maps
@@ -117,5 +136,6 @@ They cover:
 - the public-entry-point activation boundary and migration compatibility gates.
 
 The implementation does not treat a PostgreSQL substitute or a mocked result
-as proof of live Redshift behavior. A future integration issue will validate
-the contracts against an actual Redshift cluster.
+as proof of live Redshift behavior. Recorded manual runs validate ordinary-table discovery, repeated metadata,
+schema isolation, and inspectdb in both examples. External-table discovery has
+an AWS-free catalog contract; the live gate did not provision an S3/Glue fixture.
