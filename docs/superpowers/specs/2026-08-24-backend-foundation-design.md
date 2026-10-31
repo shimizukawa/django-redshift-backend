@@ -1,5 +1,22 @@
 # Backend Foundation Design
 
+Provide an independent, password-only Redshift connection foundation without switching the public backend entry point.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Driver boundary | Keep connector imports, setting validation, calls, and redaction in `driver.py`. |
+| Connection lifecycle | Compose Django public base classes in the internal wrapper; cover cursors, autocommit, timezone initialization, and health checks. |
+| TLS and authentication | Preserve explicit TLS modes and delegate an omitted mode to the driver; reject deferred authentication before connecting. |
+| Local tools | Preserve `psql` dbshell settings and explicitly reject unsupported test database provisioning. |
+| Compatibility | Keep the public `ENGINE`, migration imports, dependencies, and existing database schema unchanged in this layer. |
+
+## Read the details
+
+- **Review the implementation boundary:** [Driver boundary](#driver-boundary), [Wrapper lifecycle](#wrapper-lifecycle).
+- **Check local-tool behavior:** [dbshell client](#dbshell-client), [Test database creation](#test-database-creation).
+- **Check compatibility and verification:** [Compatibility and activation](#compatibility-and-activation), [Acceptance criteria](#acceptance-criteria).
 
 ## Purpose
 
@@ -184,7 +201,7 @@ New AWS-free tests cover:
 - The staging invariant that `django_redshift_backend.base.DatabaseWrapper`
   remains the existing wrapper and is not `_backend.DatabaseWrapper`.
 
-The 15-cell workflow from the driver investigation remains blocking. Root
+The 16-cell workflow from the driver investigation remains blocking. Root
 regression tests, lint, and package-content checks must also pass. Tests must
 not access the network, invoke `psql`, or require AWS credentials.
 

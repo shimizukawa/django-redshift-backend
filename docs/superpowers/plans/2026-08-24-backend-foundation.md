@@ -2,13 +2,74 @@
 
 **Goal:** Build an AWS-free, password-only Redshift connection foundation on Django's public base-backend classes without activating it through the existing `ENGINE` entry point.
 
+## Acceptance criteria
+
+| Area | Required outcome |
+| --- | --- |
+| Driver and settings | Production validation, password-only authentication, precedence, and redaction pass. |
+| Lifecycle | Connections, cursors, autocommit, timezone, and health contracts pass. |
+| Local tools | psql settings are preserved; unsupported test database provisioning is rejected. |
+| Compatibility | The public entry point, migration imports, and dependencies are unchanged. |
+| Verification | Supported driver matrix, quality, and distribution checks pass without AWS. |
+
+## Verification checklist
+
+Each item states the decision gate before the detailed implementation examples.
+The references retain the commands and technical expectations for that item.
+
+### 1. Promote the investigated driver contract into production
+
+**Purpose:** Promote the investigated public driver contract into the runtime boundary.
+
+**Pass condition:** Setting precedence, password-only scope, rejection, redaction, and Django exceptions use production `driver.py`; no duplicate test-only implementation remains.
+
+**Verification:** Run option and exception contracts against the production boundary. [Implementation and commands](#reference-1-promote-the-investigated-driver-contract-into-production).
+
+### 2. Implement the internal base wrapper lifecycle
+
+**Purpose:** Compose Django connection lifecycle behavior on public base classes.
+
+**Pass condition:** The internal wrapper constructs components and handles connection parameters, cursors, autocommit, session initialization, and health checks with fake DB-API objects.
+
+**Verification:** Run wrapper lifecycle and exception tests. [Implementation and commands](#reference-2-implement-the-internal-base-wrapper-lifecycle).
+
+### 3. Preserve the psql dbshell contract
+
+**Purpose:** Preserve the existing psql interface independently of PostgreSQL backend code.
+
+**Pass condition:** Arguments, environment variables, and supported dbshell options retain their behavior without exposing secrets.
+
+**Verification:** Run dbshell and wrapper contracts without invoking a psql process. [Implementation and commands](#reference-3-preserve-the-psql-dbshell-contract).
+
+### 4. Reject unsupported test database provisioning
+
+**Purpose:** Reject unsupported Django test database provisioning before SQL is executed.
+
+**Pass condition:** Create, clone, and destroy operations fail explicitly; the internal wrapper uses the independent creation component.
+
+**Verification:** Run creation and activation-boundary tests. [Implementation and commands](#reference-4-reject-unsupported-test-database-provisioning).
+
+### 5. Verify the complete foundation across the supported matrix
+
+**Purpose:** Verify foundation compatibility across supported versions.
+
+**Pass condition:** All blocking driver cells, legacy-layer regression checks, lint, and packaging gates pass; public activation and dependencies remain unchanged.
+
+**Verification:** Run the supported workflow, representative driver targets, and package/boundary checks. [Implementation and commands](#reference-5-verify-the-complete-foundation-across-the-supported-matrix).
+
+## Implementation reference
+
+The following scope, file map, examples, and commands support the checklist.
+Intermediate failing examples describe the implementation sequence; they are
+not the pass condition for the completed component.
+
 **Architecture:** Production settings validation and AWS driver calls live only in `driver.py`; an internal `_backend.py` composes the connection lifecycle with conservative Django base components. `client.py` preserves `psql` behavior and `creation.py` rejects unsupported database provisioning, while the current `base.py` remains untouched until the final activation layer.
 
 **Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-24-backend-foundation-design.md`
 
-## Global Constraints
+### Global Constraints
 
 - Support only username/password authentication in this layer.
 - Require non-empty top-level `USER` and `PASSWORD`; they override duplicate `OPTIONS` values.
@@ -22,7 +83,7 @@
 
 ---
 
-### Task 1: Promote the investigated driver contract into production
+### Reference 1: Promote the investigated driver contract into production
 
 **Files:**
 - Create: `django_redshift_backend/driver.py`
@@ -183,7 +244,7 @@ Expected: no `option_contract` references; the production driver import appears
 only in `django_redshift_backend/driver.py`. Direct driver imports may remain in
 metadata/surface investigation tests that inspect the third-party package itself.
 
-### Task 2: Implement the internal base wrapper lifecycle
+### Reference 2: Implement the internal base wrapper lifecycle
 
 **Files:**
 - Create: `django_redshift_backend/_backend.py`
@@ -418,7 +479,7 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 
 Expected: all selected tests pass.
 
-### Task 3: Preserve the psql dbshell contract
+### Reference 3: Preserve the psql dbshell contract
 
 **Files:**
 - Create: `django_redshift_backend/client.py`
@@ -584,7 +645,7 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 
 Expected: all selected tests pass and no test spawns `psql`.
 
-### Task 4: Reject unsupported test database provisioning
+### Reference 4: Reject unsupported test database provisioning
 
 **Files:**
 - Create: `django_redshift_backend/creation.py`
@@ -726,7 +787,7 @@ uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redsh
 
 Expected: all selected tests pass without accessing connection methods.
 
-### Task 5: Verify the complete foundation across the supported matrix
+### Reference 5: Verify the complete foundation across the supported matrix
 
 **Files:**
 - Verify unchanged: `.github/workflows/driver-contract.yml`
@@ -757,7 +818,7 @@ Expected: both complete suites pass.
 
 - [ ] **Step 3: Run every blocking compatibility cell**
 
-Execute every one of the 15 exact combinations in
+Execute every one of the 16 exact combinations in
 `.github/workflows/driver-contract.yml`:
 
 ```powershell
@@ -776,10 +837,11 @@ uv run --project driver_tests --python 3.12 --with "Django~=6.1.0" --with "redsh
 uv run --project driver_tests --python 3.13 --with "Django~=6.1.0" --with "redshift-connector==2.1.14" pytest driver_tests -q
 uv run --project driver_tests --python 3.14 --with "Django~=6.1.0" --with "redshift-connector==2.1.14" pytest driver_tests -q
 uv run --project driver_tests --python 3.14 --with "Django~=6.1.0" --with "redshift-connector==2.1.16" pytest driver_tests -q
+uv run --project driver_tests --python 3.12 --with "Django==5.2.8" --with "redshift-connector==2.2.0" pytest driver_tests -q
 ```
 
-Expected: all 15 cells pass with the same test count within a given driver
-contract; no cell skips a foundation test.
+Expected: every cell passes its applicable contracts; version-specific skips
+are identified explicitly rather than inferred from another cell.
 
 - [ ] **Step 4: Run the unchanged current-backend regression suite**
 
@@ -787,7 +849,8 @@ contract; no cell skips a foundation test.
 uv --cache-dir .uv-cache run --python 3.12 --with pytest --with pytest-cov --with mock --with django-environ --with psycopg2-binary pytest -q
 ```
 
-Expected: 10 passed, 22 skipped, with only the existing deprecation warning.
+Expected: the legacy-layer regression suite passes with only documented skips
+and the existing deprecation warning.
 
 - [ ] **Step 5: Run lint and packaging checks**
 
@@ -813,5 +876,5 @@ git diff --check
 
 Expected: only `driver.py` imports the AWS driver; no new foundation module
 imports PostgreSQL or vendored code; the three compatibility files have no
-diff; dependency metadata and the already-complete 15-cell workflow have no
+diff; dependency metadata and the already-complete 16-cell workflow have no
 diff; whitespace checks pass.
