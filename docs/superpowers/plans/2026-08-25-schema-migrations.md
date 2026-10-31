@@ -1648,7 +1648,7 @@ Expected: every command exits 0. Apply only mechanical Ruff fixes and rerun both
 
 - [ ] **Step 4: Run every supported Django/Python/driver matrix cell**
 
-Run the same 15 cells declared in `.github/workflows/driver-contract.yml`, explicitly selecting Python with uv:
+Run the same 16 cells declared in `.github/workflows/driver-contract.yml`, explicitly selecting Python with uv:
 
 ```powershell
 uv run --python 3.10 --project driver_tests --with "Django==4.2.30" --with "redshift-connector==2.1.14" pytest driver_tests -q
