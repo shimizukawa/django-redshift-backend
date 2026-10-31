@@ -1,7 +1,5 @@
 # Redshift Live Validation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
 **Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads `DB_PASSWORD` and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the runbook maps its outputs and `DB_PASSWORD` into the `DATABASE_URL` already consumed by `examples/proj1/config/settings.py`.
@@ -12,7 +10,7 @@
 
 ## Global Constraints
 
-- Base this stacked branch and PR on `redesign/06-activate-cleanup-release`.
+- Requires the activated backend and its example application settings.
 - Use `uv` for the isolated live-validation environment and every Python command.
 - Never deploy AWS resources from ordinary CI or an application test.
 - Use username/password database authentication only; IAM, browser SSO, and provider authentication remain out of scope.
@@ -84,12 +82,10 @@ import pytest
 
 from cdk_app.config import ValidationConfig, validate_allowed_cidr
 
-
 @pytest.mark.parametrize("value", ["0.0.0.0/0", "203.0.113.0/24", "::1/128", "invalid"])
 def test_allowed_cidr_requires_public_ipv4_host(value):
     with pytest.raises(ValueError, match="public IPv4 /32"):
         validate_allowed_cidr(value)
-
 
 def test_environment_supplies_password():
     environ = {
@@ -134,13 +130,6 @@ uv run --directory examples/cdk ruff check .
 ```
 
 Expected: tests and Ruff pass.
-
-Commit:
-
-```powershell
-git add .gitignore examples/cdk
-git commit -m "build: add isolated live validation project"
-```
 
 ### Task 2: Network and Public-Access Safety Boundary
 
@@ -201,8 +190,6 @@ Pop-Location
 
 Expected: tests pass and synthesis produces a template without contacting AWS.
 
-Commit: `git commit -am "feat: define isolated validation network"` after staging the new files.
-
 ### Task 3: Redshift Serverless Resources, Secret, and Cost Controls
 
 **Files:**
@@ -252,8 +239,6 @@ uv run --directory examples/cdk ruff check .
 git diff --check
 ```
 
-Commit: `git commit -am "feat: define disposable Redshift validation stack"` after staging the test file.
-
 ### Task 4: Plain CDK Deploy and Destroy Contract
 
 **Files:**
@@ -302,8 +287,6 @@ Run:
 uv run --directory examples/cdk python -m pytest tests/test_app.py -q
 uv run --directory examples/cdk ruff check .
 ```
-
-Commit: `git commit -am "feat: add plain CDK validation lifecycle"` after staging the new files.
 
 ### Task 5: Operator Guide and Release Evidence Template
 
@@ -366,8 +349,6 @@ git diff --check
 
 Inspect every match and confirm it is an instruction or redaction warning, not a credential.
 
-Commit: `git commit -am "docs: add live Redshift release runbook"` after staging new files.
-
 ### Task 6: AWS-Free CI and Final Verification
 
 **Files:**
@@ -376,7 +357,7 @@ Commit: `git commit -am "docs: add live Redshift release runbook"` after staging
 
 **Interfaces:**
 - Consumes: the complete isolated CDK project and operator documentation.
-- Produces: blocking AWS-free synthesis/contract checks and a reviewable stacked PR ready for the later human AWS run.
+- Produces: blocking AWS-free synthesis and contract checks, separate from human-operated AWS validation.
 
 - [x] **Step 1: Add the AWS-free workflow**
 
@@ -407,12 +388,6 @@ git status --short
 
 Expected: all tests, lint, package checks, and diff checks pass; status contains only the plan checkbox/result updates before the final commit.
 
-- [ ] **Step 3: Record verification in the PR discussion**
+- [ ] **Step 3: Keep AWS operations human-operated**
 
-Describe the infrastructure, credential contract, operator runbook, and AWS-free
-checks in the PR. Record measured versions, test results, and delivery status in
-its discussion. Distinguish offline verification from a human-operated live run.
-
-- [ ] **Step 6: Stop before AWS deployment**
-
-Report the exact reviewed operator command sequence. A human must separately choose the AWS account/Region, confirm current pricing and permissions, set `DB_PASSWORD`, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
+A human must choose the AWS account/Region, confirm current pricing and permissions, set `DB_PASSWORD`, run plain `cdk deploy`, run validation, run plain `cdk destroy`, remove `cdk.out/`, and clear the password variables. Repository implementation completion does not authorize or imply an AWS deployment.
