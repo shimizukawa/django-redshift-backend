@@ -1,7 +1,5 @@
 # Schema and Migration Compatibility Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Build an internal, database-free Redshift schema editor that supports the established Django matrix, preserves historical migration APIs, corrects future DistKey migration replay, and never repairs an existing database automatically.
 
 **Architecture:** `schema.py` inherits Django's installed `BaseDatabaseSchemaEditor` and implements focused Redshift DDL helpers instead of copying Django's `_alter_field()`. `schema_django42.py` is a deletion-oriented subclass selected only for Django 4.2, while `_backend.DatabaseWrapper` registers the new editor and explicit type mappings without activating the public engine in `base.py`. Migration-corpus tests apply operations through `collect_sql=True` without a database connection.
@@ -73,7 +71,6 @@ import re
 
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 def settings_dict():
     return {
         "NAME": "warehouse",
@@ -88,17 +85,14 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def make_wrapper(alias="schema-contract"):
     return DatabaseWrapper(settings_dict(), alias)
-
 
 def collect_schema_sql(callback):
     wrapper = make_wrapper()
     with wrapper.schema_editor(collect_sql=True, atomic=False) as editor:
         callback(editor)
     return [normalize_sql(statement) for statement in editor.collected_sql]
-
 
 def normalize_sql(sql):
     return re.sub(r"\s+", " ", str(sql)).strip()
@@ -121,10 +115,8 @@ from django_redshift_backend.schema_django42 import (
 
 from .schema_helpers import make_wrapper
 
-
 def test_schema_editor_uses_installed_public_base_class():
     assert issubclass(DatabaseSchemaEditor, BaseDatabaseSchemaEditor)
-
 
 def test_django42_selection_is_one_deletion_oriented_branch():
     assert _backend.schema_editor_class_for((4, 2, 30)) is DatabaseSchemaEditor42
@@ -132,13 +124,11 @@ def test_django42_selection_is_one_deletion_oriented_branch():
     assert _backend.schema_editor_class_for((6, 0, 0)) is DatabaseSchemaEditor
     assert _backend.schema_editor_class_for((6, 1, 0)) is DatabaseSchemaEditor
 
-
 def test_internal_wrapper_registers_selected_schema_editor():
     wrapper = make_wrapper()
     assert wrapper.SchemaEditorClass is _backend.schema_editor_class_for(
         __import__("django").VERSION
     )
-
 
 def test_redshift_data_types_and_identity_suffixes_are_explicit():
     assert _backend.DatabaseWrapper.data_types["AutoField"] == "integer"
@@ -153,7 +143,6 @@ def test_redshift_data_types_and_identity_suffixes_are_explicit():
         "BigAutoField": "identity(1, 1)",
         "SmallAutoField": "identity(1, 1)",
     }
-
 
 def test_quote_value_supports_database_free_sql_collection():
     editor = make_wrapper().schema_editor(collect_sql=True, atomic=False)
@@ -177,7 +166,6 @@ Append to `driver_tests/test_activation_boundary.py`:
 
 ```python
 from django_redshift_backend.schema import DatabaseSchemaEditor
-
 
 def test_new_schema_editor_is_internal_only():
     assert _backend.DatabaseWrapper.SchemaEditorClass.__module__.startswith(
@@ -207,7 +195,6 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
-
 
 class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_table = "CREATE TABLE %(table)s (%(definition)s)"
@@ -242,7 +229,6 @@ Create `django_redshift_backend/schema_django42.py`:
 ```python
 from .schema import DatabaseSchemaEditor as CommonDatabaseSchemaEditor
 
-
 class DatabaseSchemaEditor(CommonDatabaseSchemaEditor):
     """Django 4.2-only deletion boundary.
 
@@ -260,14 +246,12 @@ import django
 
 from .schema import DatabaseSchemaEditor
 
-
 def schema_editor_class_for(version):
     if version[:2] == (4, 2):
         from .schema_django42 import DatabaseSchemaEditor as DatabaseSchemaEditor42
 
         return DatabaseSchemaEditor42
     return DatabaseSchemaEditor
-
 
 class DatabaseWrapper(BaseDatabaseWrapper):
     SchemaEditorClass = schema_editor_class_for(django.VERSION)
@@ -323,15 +307,6 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all three commands pass. If Django 4.2 lacks either generated-column feature attribute on its base class, the explicit subclass attributes still make the tests pass without adding a version branch.
 
-- [ ] **Step 5: Commit the schema foundation**
-
-```powershell
-git add django_redshift_backend/schema.py django_redshift_backend/schema_django42.py django_redshift_backend/_backend.py django_redshift_backend/features.py driver_tests/schema_helpers.py driver_tests/test_schema_base.py driver_tests/test_activation_boundary.py driver_tests/test_features.py
-git commit -m "feat: establish Redshift schema editor"
-```
-
----
-
 ### Task 2: Generate CREATE TABLE, DISTKEY, SORTKEY, and informational foreign keys
 
 **Files:**
@@ -355,7 +330,6 @@ from django.test.utils import isolate_apps, override_settings
 from django_redshift_backend import DistKey, SortKey
 
 from .schema_helpers import collect_schema_sql
-
 
 @isolate_apps("driver_tests")
 def test_create_model_emits_redshift_types_and_table_keys():
@@ -388,7 +362,6 @@ def test_create_model_emits_redshift_types_and_table_keys():
     assert 'FOREIGN KEY ("customer_id")' in joined
     assert 'REFERENCES "driver_tests_referenced" ("id")' in joined
 
-
 @override_settings(REDSHIFT_VARCHAR_LENGTH_MULTIPLIER=3)
 @isolate_apps("driver_tests")
 def test_create_model_applies_varchar_byte_multiplier_once():
@@ -400,7 +373,6 @@ def test_create_model_applies_varchar_byte_multiplier_once():
 
     sql = collect_schema_sql(lambda editor: editor.create_model(Label))
     assert '"value" varchar(300)' in " ".join(sql)
-
 
 @pytest.mark.parametrize("fields", [[], ["id", "name"]])
 @isolate_apps("driver_tests")
@@ -414,7 +386,6 @@ def test_distkey_requires_exactly_one_field(fields):
 
     with pytest.raises(ValueError, match="exactly one field"):
         collect_schema_sql(lambda editor: editor.create_model(InvalidKey))
-
 
 @isolate_apps("driver_tests")
 def test_create_model_rejects_more_than_one_distkey():
@@ -432,7 +403,6 @@ def test_create_model_rejects_more_than_one_distkey():
     with pytest.raises(ValueError, match="more than one DistKey"):
         collect_schema_sql(lambda editor: editor.create_model(DuplicateKey))
 
-
 @isolate_apps("driver_tests")
 def test_create_model_rejects_ordinary_model_index():
     class Indexed(models.Model):
@@ -444,7 +414,6 @@ def test_create_model_rejects_ordinary_model_index():
 
     with pytest.raises(NotSupportedError, match="ordinary_idx"):
         collect_schema_sql(lambda editor: editor.create_model(Indexed))
-
 
 @isolate_apps("driver_tests")
 def test_db_index_is_an_implicit_noop_not_create_index_sql():
@@ -601,15 +570,6 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: both commands pass without a Django-version conditional in `schema.py`.
 
-- [ ] **Step 5: Commit CREATE TABLE support**
-
-```powershell
-git add django_redshift_backend/schema.py driver_tests/test_schema_create.py
-git commit -m "feat: generate Redshift table DDL"
-```
-
----
-
 ### Task 3: Implement DistKey operations and explicit index/constraint behavior
 
 **Files:**
@@ -634,7 +594,6 @@ from django_redshift_backend import DistKey
 
 from .schema_helpers import collect_schema_sql
 
-
 @isolate_apps("driver_tests")
 def test_add_distkey_uses_alter_distkey():
     class Event(models.Model):
@@ -649,7 +608,6 @@ def test_add_distkey_uses_alter_distkey():
         'ALTER TABLE "driver_tests_event" ALTER DISTKEY "customer";'
     ]
 
-
 @isolate_apps("driver_tests")
 def test_remove_distkey_returns_table_to_auto_distribution():
     class Event(models.Model):
@@ -663,7 +621,6 @@ def test_remove_distkey_returns_table_to_auto_distribution():
     assert sql == [
         'ALTER TABLE "driver_tests_event" ALTER DISTSTYLE AUTO;'
     ]
-
 
 @pytest.mark.parametrize("method", ["add_index", "remove_index"])
 @isolate_apps("driver_tests")
@@ -695,7 +652,6 @@ def test_simple_unique_constraint_is_informational_ddl():
     assert sql == [
         'ALTER TABLE "driver_tests_event" ADD CONSTRAINT "event_code_uniq" UNIQUE ("code");'
     ]
-
 
 @pytest.mark.parametrize(
     "constraint",
@@ -795,15 +751,6 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all commands pass; warnings about Django's `check` to `condition` rename are avoided by the test helper.
 
-- [ ] **Step 5: Commit index and constraint behavior**
-
-```powershell
-git add django_redshift_backend/schema.py driver_tests/test_schema_indexes_constraints.py
-git commit -m "feat: add Redshift key and constraint DDL"
-```
-
----
-
 ### Task 4: Implement AddField with persistent compatibility defaults
 
 **Files:**
@@ -826,7 +773,6 @@ from django.test.utils import isolate_apps
 
 from .schema_helpers import collect_schema_sql
 
-
 @isolate_apps("driver_tests")
 def test_add_nullable_field_is_direct():
     class Pony(models.Model):
@@ -842,7 +788,6 @@ def test_add_nullable_field_is_direct():
     assert sql == [
         'ALTER TABLE "driver_tests_pony" ADD COLUMN "name" varchar(10) NULL;'
     ]
-
 
 @isolate_apps("driver_tests")
 def test_add_nonnull_field_keeps_python_default_for_compatibility():
@@ -860,7 +805,6 @@ def test_add_nonnull_field_keeps_python_default_for_compatibility():
         'ALTER TABLE "driver_tests_pony" ADD COLUMN "name" varchar(10) DEFAULT \'unknown\' NOT NULL;'
     ]
 
-
 @isolate_apps("driver_tests")
 def test_add_nonnull_field_without_default_fails_before_execution():
     class Pony(models.Model):
@@ -874,7 +818,6 @@ def test_add_nonnull_field_without_default_fails_before_execution():
     field.model = Pony
     with pytest.raises(NotSupportedError, match="non-null.*default"):
         collect_schema_sql(lambda editor: editor.add_field(Pony, field))
-
 
 @isolate_apps("driver_tests")
 def test_add_unique_field_separates_column_and_constraint():
@@ -994,15 +937,6 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 ```
 
 Expected: all commands pass. Django 4.2 skips only the `db_default` and generated-field cases via capability-based `pytest.mark.skipif`, not production version checks.
-
-- [ ] **Step 5: Commit AddField behavior**
-
-```powershell
-git add django_redshift_backend/schema.py driver_tests/test_schema_add_field.py
-git commit -m "feat: add Redshift column migration DDL"
-```
-
----
 
 ### Task 5: Implement direct VARCHAR changes, focused recreation, and SORTKEY removal
 
@@ -1325,15 +1259,6 @@ uv run --project driver_tests --with "Django~=6.1.0" pytest driver_tests/test_sc
 
 Expected: all tests pass, and `rg -n "BASED FROM|django40|postgresql.schema" django_redshift_backend/schema.py django_redshift_backend/schema_django42.py` returns no matches.
 
-- [ ] **Step 7: Commit alter/remove behavior**
-
-```powershell
-git add django_redshift_backend/schema.py driver_tests/test_schema_alter_field.py
-git commit -m "feat: add focused Redshift column alterations"
-```
-
----
-
 ### Task 6: Convert the historical migration corpus into a database-free compatibility gate
 
 **Files:**
@@ -1361,7 +1286,6 @@ Keep `DATABASES={}` so importing and rendering migration state cannot connect to
 ```python
 from django.apps import apps
 
-
 def test_existing_migration_corpus_app_is_installed_without_database():
     assert apps.get_app_config("testapp").name == "tests.testapp"
 ```
@@ -1381,7 +1305,6 @@ from django.db.migrations.state import ProjectState
 from django_redshift_backend import DistKey, SortKey
 from django_redshift_backend.distkey import DistKey as LegacyDistKey
 
-
 def test_historical_public_paths_remain_stable():
     assert LegacyDistKey is DistKey
     assert DistKey(fields=["customer"], name="customer_distkey").deconstruct()[1] == (
@@ -1391,19 +1314,16 @@ def test_historical_public_paths_remain_stable():
         "django_redshift_backend.SortKey"
     )
 
-
 def test_existing_migration_module_imports_unchanged():
     module = import_module("tests.testapp.migrations.0001_initial")
     migration = module.Migration("0001_initial", "testapp")
     assert migration.initial is True
     assert migration.operations
 
-
 def test_loader_builds_disk_graph_without_connection(monkeypatch):
     loader = MigrationLoader(None, ignore_no_migrations=True)
     assert ("testapp", "0001_initial") in loader.disk_migrations
     assert loader.graph.leaf_nodes("testapp") == [("testapp", "0001_initial")]
-
 
 def test_unchanged_rendered_state_has_no_detected_changes():
     loader = MigrationLoader(None, ignore_no_migrations=True)
@@ -1469,7 +1389,6 @@ Use `call_command()` with no database settings:
 ```python
 from django.core.management import call_command
 
-
 def test_makemigrations_check_requires_no_new_migration(capsys):
     call_command("makemigrations", "testapp", check=True, dry_run=True, verbosity=1)
     captured = capsys.readouterr()
@@ -1491,20 +1410,7 @@ Expected: every command passes with identical semantic SQL after digest-only nor
 
 - [ ] **Step 7: Prove protected compatibility files did not change**
 
-```powershell
-git diff redesign/03-operations-features -- django_redshift_backend/meta.py django_redshift_backend/distkey.py tests/testapp/migrations/0001_initial.py tests/testapp/models.py
-```
-
 Expected: no output.
-
-- [ ] **Step 8: Commit the migration compatibility gate**
-
-```powershell
-git add driver_tests/conftest.py driver_tests/test_schema_migrations.py
-git commit -m "test: preserve Redshift migration compatibility"
-```
-
----
 
 ### Task 7: Document upgrade behavior and run the complete release gate
 
@@ -1610,14 +1516,13 @@ def test_new_schema_path_has_no_vendored_or_psycopg2_dependency():
     assert "psycopg2" not in source
     assert "django.db.backends.postgresql" not in source
 
-
 def test_schema_editor_does_not_copy_django_alter_field_commentary():
     source = (root / "schema.py").read_text(encoding="utf-8")
     assert "BASED FROM" not in source
     assert "four_way_default_alteration" not in source
 ```
 
-Add an activation test asserting `base.py`, `meta.py`, `distkey.py`, and the existing migration file have the same Git blob IDs as `redesign/03-operations-features`. Implement this as a verification command rather than hard-coding commit hashes into a unit test.
+Verify that schema work preserves the public backend entry point, key-import APIs, and existing migration definitions. Test import identity, deconstruction, and migration behavior rather than hard-coding Git references or blob IDs.
 
 - [ ] **Step 3: Run Ruff and all driver contracts on the current interpreter**
 
@@ -1659,8 +1564,6 @@ Expected: all 15 commands exit 0. Record the pass count for each cell in the PR 
 uv run --with pytest --with django-environ pytest -q
 uv build --sdist --wheel
 uvx twine check dist/*
-git diff --check redesign/03-operations-features..HEAD
-git diff --exit-code redesign/03-operations-features -- django_redshift_backend/base.py django_redshift_backend/meta.py django_redshift_backend/distkey.py tests/testapp/migrations/0001_initial.py tests/testapp/models.py
 git grep -n -E "_vendor|django\.db\.backends\.postgresql|psycopg2" -- django_redshift_backend/schema.py django_redshift_backend/schema_django42.py django_redshift_backend/_backend.py
 ```
 
@@ -1669,25 +1572,5 @@ Expected:
 - root regression retains the known database skips and no failures;
 - build and Twine exit 0;
 - `git diff --check` exits 0;
-- the protected-file diff exits 0 with no output;
+- public entry-point, key-import, and existing-migration contracts remain unchanged;
 - the forbidden-import grep exits 1 with no matches.
-
-- [ ] **Step 6: Commit documentation and final test hardening**
-
-```powershell
-git add doc/schema-migrations.rst doc/index.rst driver_tests/test_schema_base.py driver_tests/test_schema_create.py driver_tests/test_schema_indexes_constraints.py driver_tests/test_schema_add_field.py driver_tests/test_schema_alter_field.py driver_tests/test_schema_migrations.py
-git commit -m "docs: explain schema migration compatibility"
-```
-
-- [ ] **Step 7: Perform a final branch review before push or PR creation**
-
-```powershell
-git status --short --branch
-git log --oneline --decorate redesign/03-operations-features..HEAD
-git diff --stat redesign/03-operations-features..HEAD
-git diff --check redesign/03-operations-features..HEAD
-```
-
-Expected: a clean `redesign/04-schema-migrations` worktree, only the planned schema/migration files in the stack diff, and no whitespace errors.
-
-Do not push or create the stacked PR until the final review and verification evidence have been reported to the user.
