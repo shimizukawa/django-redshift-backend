@@ -4,11 +4,21 @@ This Python CDK application creates a temporary Amazon Redshift Serverless
 environment for manual investigation before release. Deployment is never part
 of ordinary CI. The human operator owns both `cdk deploy` and `cdk destroy`.
 
+## Operator sequence
+
+1. [Prepare the account, tools, and password](#prerequisites).
+2. [Deploy](#deploy), then [connect and investigate](#connect-and-investigate).
+3. [Destroy and verify resource removal](#destroy-and-verify), including after failure.
+
 ## Prerequisites
+
+### Tools and credentials
 
 - AWS CLI v2 authenticated to the intended personal AWS account.
 - AWS CDK CLI v2 and Node.js installed.
 - `uv` and Python 3.12 or later.
+### Target and temporary password
+
 - A temporary `DB_PASSWORD` value set before any CDK command, including
   `cdk bootstrap`, because the CDK CLI evaluates this application to determine
   its target environment. It must be 8-64 printable ASCII characters, include
@@ -66,7 +76,7 @@ non-secret deployment outputs:
 $encodedPassword = [uri]::EscapeDataString($env:DB_PASSWORD)
 $env:DATABASE_URL = "redshift://validation_admin:${encodedPassword}@<endpoint>:5439/validation"
 $env:SECRET_KEY = 'temporary-live-validation-key'
-uv run --with django-environ python examples/proj1/manage.py check
+uv run --directory examples/proj1 --frozen python manage.py check
 ```
 
 The same values may be placed in an ignored `.env` file. Never commit that
@@ -89,10 +99,10 @@ After the human-operated deploy, use the actual endpoint hostname and the
 existing project settings. From `examples/proj1`, run:
 
 ```powershell
-uv run --with redshift-connector==2.2.0 python -c "from importlib.metadata import version; print(version('redshift-connector'))"
-uv run --with redshift-connector==2.2.0 python manage.py check
-uv run --with redshift-connector==2.2.0 python manage.py migrate
-uv run --with redshift-connector==2.2.0 python manage.py inspectdb auth_group
+uv run --frozen --with redshift-connector==2.2.0 python -c "from importlib.metadata import version; print(version('redshift-connector'))"
+uv run --frozen --with redshift-connector==2.2.0 python manage.py check
+uv run --frozen --with redshift-connector==2.2.0 python manage.py migrate
+uv run --frozen --with redshift-connector==2.2.0 python manage.py inspectdb auth_group
 ```
 
 Confirm a database query and a reversible ORM write/read/delete round trip;
@@ -121,11 +131,13 @@ cases as pending. Destroy and verify absence after the AWS session as below.
 
 ## Destroy and verify
 
-Destroy is required after success, failure, or an interrupted investigation:
+Destroy is required after success, failure, or an interrupted investigation.
+From the repository root:
 
 ```powershell
-cd examples/cdk
+Push-Location examples/cdk
 cdk destroy
+Pop-Location
 ```
 
 Use the names printed by deploy to confirm removal. Both commands must report

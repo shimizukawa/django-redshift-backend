@@ -2,13 +2,82 @@
 
 **Goal:** Provide a reproducible, disposable Amazon Redshift Serverless environment and a human-operated release-gate run of `examples/proj1` against the public backend.
 
+## Acceptance criteria
+
+| Area | Required outcome |
+| --- | --- |
+| Application | Python CDK uses fixed environment variables and plain deploy/destroy commands. |
+| Network and resources | Dedicated VPC, /32 ingress, TLS, deletion order, and usage limits are verified. |
+| Connection | Existing example settings accept the documented endpoint and DB_PASSWORD. |
+| Evidence and cleanup | Version-qualified probes and resource-absence checks are recorded without secrets. |
+| CI boundary | Ordinary CI performs only AWS-free synthesis and contract verification. |
+
+## Verification checklist
+
+Each item states the decision gate before the detailed implementation examples.
+The references retain the commands and technical expectations for that item.
+
+### 1. Isolated CDK Project and Contract Helpers
+
+**Purpose:** Create the isolated Python CDK project and configuration contracts.
+
+**Pass condition:** Fixed environment variables, cdk.json, password validation, and injected IP/environment lookup work without AWS.
+
+**Verification:** Run configuration and application contract tests. [Implementation and commands](#reference-1-isolated-cdk-project-and-contract-helpers).
+
+### 2. Network and Public-Access Safety Boundary
+
+**Purpose:** Define the dedicated network and single-operator access boundary.
+
+**Pass condition:** Three public subnets, no NAT/EIP, and TCP 5439 restricted to the operator IPv4 /32 are synthesized explicitly.
+
+**Verification:** Run AWS-free network template contracts. [Implementation and commands](#reference-2-network-and-public-access-safety-boundary).
+
+### 3. Redshift Serverless Resources, Secret, and Cost Controls
+
+**Purpose:** Define disposable Redshift resources, deletion order, and cost limits.
+
+**Pass condition:** Namespace/workgroup, TLS, capacity, usage-limit custom resource, and non-secret outputs meet the deployment contracts.
+
+**Verification:** Run Redshift template and custom-resource lifecycle contracts without deployment. [Implementation and commands](#reference-3-redshift-serverless-resources-secret-and-cost-controls).
+
+### 4. Plain CDK Deploy and Destroy Contract
+
+**Purpose:** Keep deployment and destruction in normal CDK commands.
+
+**Pass condition:** A human can use plain cdk deploy/destroy; the application needs no extra deploy wrapper, flags, or mandatory test runner.
+
+**Verification:** Run the app entry-point and injected environment/IP contracts. [Implementation and commands](#reference-4-plain-cdk-deploy-and-destroy-contract).
+
+### 5. Operator Guide and Release Evidence Template
+
+**Purpose:** Make both examples usable against the temporary endpoint.
+
+**Pass condition:** The operator can configure existing Django settings, select relevant probes, record sanitized evidence, and verify cleanup.
+
+**Verification:** Review the connection/runbook checklist and version-qualified evidence; AWS runs remain human-operated. [Implementation and commands](#reference-5-operator-guide-and-release-evidence-template).
+
+### 6. AWS-Free CI and Final Verification
+
+**Purpose:** Keep CI AWS-free and complete the infrastructure quality gate.
+
+**Pass condition:** Synthesis tests, lint, and package checks pass without AWS credentials; live validation is not inferred from these checks.
+
+**Verification:** Run the CDK workflow and documented local verification commands. [Implementation and commands](#reference-6-aws-free-ci-and-final-verification).
+
+## Implementation reference
+
+The following scope, file map, examples, and commands support the checklist.
+Intermediate failing examples describe the implementation sequence; they are
+not the pass condition for the completed component.
+
 **Architecture:** An isolated `uv` project under `examples/cdk/` owns a Python CDK stack and AWS-free synthesis tests. Its `cdk.json` fixes the Python app command, so a human runs plain `cdk deploy`; the app reads `DB_PASSWORD` and resolves the caller's public IPv4 at synthesis time. The stack creates a dedicated public-subnet VPC, a `/32`-restricted Serverless workgroup, and cost controls; the runbook maps its outputs and `DB_PASSWORD` into the `DATABASE_URL` already consumed by `examples/proj1/config/settings.py`.
 
 **Tech Stack:** Python 3.12, `uv`, AWS CDK v2 for Python (`aws-cdk-lib`), pytest, AWS CLI v2, Django management commands, and Amazon Redshift Serverless. No TypeScript or JavaScript CDK application is used.
 
 **Spec:** `docs/superpowers/specs/2026-08-30-redshift-live-validation-design.md`
 
-## Global Constraints
+### Global Constraints
 
 - Requires the activated backend and its example application settings.
 - Use `uv` for the isolated live-validation environment and every Python command.
@@ -27,7 +96,7 @@
 
 ---
 
-### Task 1: Isolated CDK Project and Contract Helpers
+### Reference 1: Isolated CDK Project and Contract Helpers
 
 **Files:**
 - Create: `examples/cdk/pyproject.toml`
@@ -133,7 +202,7 @@ uv run --directory examples/cdk ruff check .
 
 Expected: tests and Ruff pass.
 
-### Task 2: Network and Public-Access Safety Boundary
+### Reference 2: Network and Public-Access Safety Boundary
 
 **Files:**
 - Create: `examples/cdk/cdk_app/stack.py`
@@ -192,7 +261,7 @@ Pop-Location
 
 Expected: tests pass and synthesis produces a template without contacting AWS.
 
-### Task 3: Redshift Serverless Resources, Secret, and Cost Controls
+### Reference 3: Redshift Serverless Resources, Secret, and Cost Controls
 
 **Files:**
 - Modify: `examples/cdk/cdk_app/stack.py`
@@ -242,7 +311,7 @@ git diff --check
 ```
 
 
-### Task 4: Plain CDK Deploy and Destroy Contract
+### Reference 4: Plain CDK Deploy and Destroy Contract
 
 **Files:**
 - Modify: `examples/cdk/app.py`
@@ -292,7 +361,7 @@ uv run --directory examples/cdk ruff check .
 ```
 
 
-### Task 5: Operator Guide and Release Evidence Template
+### Reference 5: Operator Guide and Release Evidence Template
 
 **Files:**
 - Create: `examples/cdk/README.md`
@@ -353,7 +422,7 @@ git diff --check
 
 Inspect every match and confirm it is an instruction or redaction warning, not a credential.
 
-### Task 6: AWS-Free CI and Final Verification
+### Reference 6: AWS-Free CI and Final Verification
 
 **Files:**
 - Create: `.github/workflows/live-validation-contract.yml`

@@ -1,5 +1,22 @@
 # Redshift Live Validation Environment Design
 
+Provide a disposable Redshift Serverless environment that a human deploys and destroys, with connection settings usable by both example projects.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| Operator lifecycle | Use plain `cdk deploy` and `cdk destroy` from the Python CDK project; ordinary CI remains AWS-free. |
+| Connection settings | Read the fixed `DB_PASSWORD` variable and expose only non-secret outputs; reuse existing Django settings and `DATABASE_URL`. |
+| Network and cost | Use a dedicated VPC, operator IPv4 /32, TLS, 4 base / 8 maximum RPU, and a daily 8 RPU-hour query-deactivation limit. |
+| Validation | Allow relevant Django, ORM, and SQL checks without a required runner; record versions, limitations, and sanitized outcomes. |
+| Cleanup | Verify removal of stack, workgroup, namespace, and snapshots; clear local synthesized secrets and temporary credentials. |
+
+## Read the details
+
+- **Review provisioning and boundaries:** [Deployment Architecture](#deployment-architecture), [Safety and Cost Controls](#safety-and-cost-controls).
+- **Follow connection and cleanup responsibilities:** [Lifecycle](#lifecycle), [Live Validation Contract](#live-validation-contract).
+- **Check offline and live evidence:** [Tests and Evidence](#tests-and-evidence).
 
 ## Purpose
 
@@ -15,8 +32,8 @@ it never creates AWS resources from ordinary CI or from an application test.
 ## Goals
 
 - Create and destroy an isolated Redshift Serverless environment with CDK.
-- Keep compute, network, and database resources ephemeral and prevent
-  unattended cost.
+- Keep compute, network, and database resources ephemeral and limit query
+  cost during the operator-owned session.
 - Permit only the machine executing the validation to reach the public
   endpoint, even when that machine has a dynamic public IP address.
 - Make the deployed endpoint usable from `examples/proj1` and other local
@@ -30,8 +47,8 @@ it never creates AWS resources from ordinary CI or from an application test.
 - GitHub Actions access to the live environment.
 - IAM, browser SSO, or other non-password Redshift authentication modes.
 - An unrestricted public endpoint, NAT gateway, or a shared VPC platform.
-- Converting `examples/dj-sql-explorer` into a required release gate. It may
-  later be run as an additional manual smoke test.
+- Automating the example applications as AWS-backed CI jobs. Both examples
+  remain available for human-operated validation with documented limitations.
 
 ## Deployment Architecture
 
@@ -109,7 +126,7 @@ workgroup leaves storage-bearing namespace resources behind.
 ## Live Validation Contract
 
 The stack outputs the non-secret values needed to connect: database name,
-endpoint host, port, admin username, Region, and accepted CIDR. The local
+endpoint host, port, admin username, namespace, workgroup, and accepted CIDR. The local
 `DB_PASSWORD` value completes the connection settings. Documentation shows how
 to combine those values into a `redshift://` `DATABASE_URL` for the existing
 `examples/proj1/config/settings.py`, either through the process environment or
@@ -166,11 +183,8 @@ real-Redshift evidence is a release criterion for 6.0.0; a relevant failure
 blocks the release until the defect is fixed or the release scope is explicitly
 reconsidered.
 
-## Delivery
+## Implementation boundary
 
-The work is delivered in a new stacked branch based on
-`redesign/06-activate-cleanup-release`, following the established branch
-strategy. Its pull request is the real-integration validation PR and includes
-the infrastructure source, local commands, AWS-free synthesis tests, and the
-manual release checklist. No existing backend behavior or user database schema
-is changed by this work.
+This layer supplies infrastructure, operator commands, AWS-free synthesis
+contracts, and the manual evidence checklist. It does not change existing
+backend behavior or user database schemas.
