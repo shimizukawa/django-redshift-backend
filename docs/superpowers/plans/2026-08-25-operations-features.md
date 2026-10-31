@@ -2,13 +2,82 @@
 
 **Goal:** Add a documented, AWS-free Redshift operations and feature layer that fixes issue #171, adopts pull request #103's complete conflict-handling intent, and remains inactive through the public backend entry point.
 
+## Acceptance criteria
+
+| Area | Required outcome |
+| --- | --- |
+| Capabilities | Redshift-supported features are explicit; unsupported behavior is rejected. |
+| SQL and values | Date/time signatures, conversions, defaults, VARBYTE, and pattern expressions meet contracts. |
+| ORM behavior | ManyToMany and #171 regressions pass without unsupported SQL. |
+| Compatibility | Public activation, imports, migrations, and dependencies stay unchanged. |
+| Verification | Supported driver matrix, lint, builds, and package checks pass offline. |
+
+## Verification checklist
+
+Each item states the decision gate before the detailed implementation examples.
+The references retain the commands and technical expectations for that item.
+
+### 1. Declare conservative Redshift feature contracts
+
+**Purpose:** Declare only documented Redshift capabilities.
+
+**Pass condition:** The internal wrapper exposes conservative feature flags, including supported defaults and explicit unsupported operations.
+
+**Verification:** Run feature contracts on supported Django versions. [Implementation and commands](#reference-1-declare-conservative-redshift-feature-contracts).
+
+### 2. Implement modern date/time operations and issue #171 regression
+
+**Purpose:** Implement modern Django date/time signatures using Redshift SQL.
+
+**Pass condition:** Extraction, truncation, timezone handling, and the #171 ORM regression meet SQL/parameter contracts.
+
+**Verification:** Run datetime operation and ORM regression tests. [Implementation and commands](#reference-2-implement-modern-datetime-operations-and-issue-171-regression).
+
+### 3. Preserve supported general operations and reject PostgreSQL syntax
+
+**Purpose:** Preserve supported general operations and reject unsupported PostgreSQL assumptions.
+
+**Pass condition:** Supported conversions and temporal/identity/bulk/flush/explain behavior are explicit; unsupported cases raise without speculative compiler emulation.
+
+**Verification:** Run operation and temporal compilation tests; include VARBYTE and pattern-lookup contracts. [Implementation and commands](#reference-3-preserve-supported-general-operations-and-reject-postgresql-syntax).
+
+### 4. Reproduce issue #102 and adopt pull request #103 behavior
+
+**Purpose:** Preserve ManyToMany pre-check behavior and reject explicit conflict-ignore.
+
+**Pass condition:** The feature flag selects Django's existing-row check without unsupported ON CONFLICT SQL.
+
+**Verification:** Run the #102/#103 conflict regression contracts. [Implementation and commands](#reference-4-reproduce-issue-102-and-adopt-pull-request-103-behavior).
+
+### 5. Prove activation and compatibility boundaries
+
+**Purpose:** Keep this layer inactive through the public entry point.
+
+**Pass condition:** Operations/features register only on the internal wrapper; imports, migration definitions, and dependencies remain unchanged.
+
+**Verification:** Run activation-boundary and compatibility contracts. [Implementation and commands](#reference-5-prove-activation-and-compatibility-boundaries).
+
+### 6. Verify the complete component contracts
+
+**Purpose:** Verify the complete operations layer.
+
+**Pass condition:** Supported driver matrix, regression, lint, build, and package-content checks pass without AWS.
+
+**Verification:** Run all workflow combinations, including connector 2.2.0, and the documented quality gates. [Implementation and commands](#reference-6-verify-the-complete-component-contracts).
+
+## Implementation reference
+
+The following scope, file map, examples, and commands support the checklist.
+Intermediate failing examples describe the implementation sequence; they are
+not the pass condition for the completed component.
+
 **Architecture:** `features.py` and `operations.py` inherit only Django's public base-backend classes and are registered only by the internal `_backend.DatabaseWrapper`. Feature flags are conservative and evidence-backed; SQL methods preserve parameters and reject PostgreSQL-only syntax before execution. `base.py` remains the active engine until the final stack layer.
 
 **Tech Stack:** Python 3.10-3.14, Django 4.2/5.2/6.0/6.1 public base backend APIs, `redshift-connector>=2.1.14,<3`, pytest, uv, Ruff 0.6.2, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-25-operations-features-design.md`
 
-## Global Constraints
+### Global Constraints
 
 - Treat the current Amazon Redshift Database Developer Guide as authoritative for Redshift SQL support and semantics.
 - Use only public classes and functions under `django.db.backends.base`, `django.db.backends.utils`, and public ORM expression/compiler APIs.
@@ -26,7 +95,7 @@
 
 ---
 
-### Task 1: Declare conservative Redshift feature contracts
+### Reference 1: Declare conservative Redshift feature contracts
 
 **Files:**
 - Create: `django_redshift_backend/features.py`
@@ -312,7 +381,7 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 
 Expected: both commands pass with the same feature manifest.
 
-### Task 2: Implement modern date/time operations and issue #171 regression
+### Reference 2: Implement modern date/time operations and issue #171 regression
 
 **Files:**
 - Create: `django_redshift_backend/operations.py`
@@ -621,7 +690,7 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 
 Expected: both pass; the ORM test reaches `DatabaseOperations.datetime_trunc_sql()` without the issue #171 `TypeError`.
 
-### Task 3: Preserve supported general operations and reject PostgreSQL syntax
+### Reference 3: Preserve supported general operations and reject PostgreSQL syntax
 
 **Files:**
 - Modify: `django_redshift_backend/operations.py`
@@ -1097,7 +1166,7 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 
 Expected: all pass with identical SQL contracts.
 
-### Task 4: Reproduce issue #102 and adopt pull request #103 behavior
+### Reference 4: Reproduce issue #102 and adopt pull request #103 behavior
 
 **Files:**
 - Create: `driver_tests/test_conflict_contract.py`
@@ -1211,7 +1280,7 @@ Expected: all tests pass without a database connection. `_get_add_plan()` is use
 only as test instrumentation for Django's public ManyToMany `add()` path; no
 private Django helper is imported or called by production code.
 
-### Task 5: Prove activation and compatibility boundaries
+### Reference 5: Prove activation and compatibility boundaries
 
 **Files:**
 - Modify: `driver_tests/test_activation_boundary.py`
@@ -1294,7 +1363,7 @@ rg -n "compiler_module\s*=" django_redshift_backend
 
 Expected: the first two commands have no output. The compiler search finds no new project override; inherited references under the untouched vendored/current backend do not count as redesigned-component use.
 
-### Task 6: Verify the complete component contracts
+### Reference 6: Verify the complete component contracts
 
 **Files:**
 - Modify only if verification exposes a defect in Tasks 1-5.
@@ -1304,7 +1373,7 @@ Expected: the first two commands have no output. The compiler search finds no ne
 - Consumes: the completed branch and existing GitHub Actions matrix.
 - Produces: supported-version, package, and public-API compatibility checks.
 
-- [ ] **Step 1: Run all 15 workflow cells exactly**
+- [ ] **Step 1: Run all 16 workflow cells exactly**
 
 Run this PowerShell matrix and stop on the first failure:
 
@@ -1332,7 +1401,7 @@ foreach ($cell in $cells) {
 }
 ```
 
-Expected: all 15 cells pass. Record the exact test count from the output; do not predict it in the PR body.
+Expected: all 16 cells pass. Record the exact test count from the output; retain per-run output in the PR discussion.
 
 - [ ] **Step 2: Run root regression and lint**
 

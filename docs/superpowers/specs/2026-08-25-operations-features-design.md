@@ -1,5 +1,23 @@
 # Operations and Features Design
 
+Define Redshift SQL operations and explicit capability flags on the internal backend, with conservative rejection of unsupported behavior.
+
+## Design at a glance
+
+| Area | Policy |
+| --- | --- |
+| SQL operations | Use modern Django signatures, Redshift temporal SQL, and parameter-aware expression handling. |
+| Supported values | Support documented defaults, VARBYTE conversion, and expression-RHS pattern lookups. |
+| Conflict behavior | Keep the ManyToMany existing-row pre-check; reject explicit conflict-ignore. |
+| Known limits | Preserve quoted `MAX(pk)` identity lookup with its concurrency limit; do not claim mixed Date/DateTime subtraction or field-specific `DISTINCT ON`. |
+| Activation boundary | Register only on the internal wrapper; preserve public imports, migrations, and dependency metadata. |
+
+## Read the details
+
+- **Review SQL and capabilities:** [Architecture](#architecture), [Issue and pull-request decisions](#issue-and-pull-request-decisions).
+- **Check application impact:** [Compatibility classification](#compatibility-classification), [Error handling](#error-handling).
+- **Check the evidence and gates:** [Test strategy](#test-strategy), [Completion criteria](#completion-criteria).
+
 ## Goal
 
 Add an AWS-free operations and feature-contract layer for the redesigned
@@ -40,7 +58,7 @@ This stack layer will:
 - Register both classes on the inactive internal wrapper in `_backend.py`.
 - Add database-free operation, feature, expression, and conflict-path tests to
   `driver_tests`.
-- Run the existing 15-cell Django/Python/driver contract matrix.
+- Run the existing 16-cell Django/Python/driver contract matrix.
 - Preserve the current `django_redshift_backend.base.DatabaseWrapper` as the
   active `ENGINE` implementation until the final activation layer.
 
@@ -160,6 +178,13 @@ existing backend even though Redshift documents a 127-byte identifier limit.
 Changing the value could alter automatically generated constraint or index
 names and is therefore deferred to the schema/migration compatibility layer.
 
+### Value conversion and expression lookups
+
+VARBYTE hexadecimal results are converted to `bytes`, including encrypted-field
+round trips. Pattern lookups with an expression RHS use Redshift-compatible
+`CHR(92)` escaping for contains, starts-with, and ends-with semantics. These
+contracts do not introduce a custom SQL compiler.
+
 ### Inserted identity retrieval
 
 Redshift does not support `RETURNING`, and the driver contract does not supply
@@ -246,7 +271,7 @@ parameter preservation.
 
 - The independent base-class implementation satisfies issue #167's request to
   stop relying on a vendored PostgreSQL backend.
-- The 15-cell blocking matrix makes Django 5.2 and 6.x support explicit for
+- The 16-cell blocking matrix makes Django 5.2 and 6.x support explicit for
   issues #168 and #183 rather than relying only on dependency metadata.
 - Issue #175 is addressed by the driver boundary, but the initial release
   remains username/password-only by prior decision; it does not expand this
@@ -321,7 +346,7 @@ All new tests live in `driver_tests` and use `uv`.
    the new operations and features.
 7. **Compatibility tests** prove `base.py`, `meta.py`, `distkey.py`, migration
    modules, and schema-facing behavior are unchanged in this layer.
-8. **Matrix verification** runs all 15 existing Django/Python/driver cells,
+8. **Matrix verification** runs all 16 existing Django/Python/driver cells,
    the root regression suite, Ruff, package build, twine check, and wheel
    content inspection.
 
