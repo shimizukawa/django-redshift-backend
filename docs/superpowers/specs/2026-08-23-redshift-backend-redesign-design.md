@@ -386,13 +386,21 @@ driver or Redshift SQL works. It may be retained temporarily only where it tests
 driver-independent ORM behavior, and is removed when equivalent contract tests
 exist.
 
-### Deferred integration testing
+### Manual validation and deferred AWS automation
 
-Real-Redshift tests remain skipped and clearly marked. A future issue will cover
-AWS account setup, secretless GitHub authentication, cost controls, test
-isolation, scheduled or release-gated execution, and the design and validation
-of IAM, Serverless, and identity-provider authentication. Initial release notes
-must state that the first redesigned release supports username/password only.
+Manual real-Redshift validation has been recorded for `examples/proj1` and
+`examples/dj-sql-explorer`. Its version-qualified results, limitations, and
+resource-cleanup evidence are documented separately. Those results apply to the
+recorded versions and scenarios; they must not be inferred from AWS-free
+contract or synthesis tests.
+
+Ordinary CI remains AWS-free, with real-Redshift tests skipped there. Automated
+AWS-backed CI, including scheduled execution, secretless GitHub authentication,
+test isolation, and cost controls, remains separate follow-up work.
+
+IAM, Redshift Serverless IAM, and identity-provider database authentication also
+remain deferred. Initial release notes must state that the first redesigned
+release supports username/password only.
 
 ## Error handling
 

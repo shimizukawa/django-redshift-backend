@@ -171,7 +171,7 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 - Produces: `uv run --project driver_tests ...` as the command prefix used by
   every later task.
 
-- [ ] **Step 2: Verify that the isolated project does not exist yet**
+- [ ] **Step 1: Verify that the isolated project does not exist yet**
 
 Run:
 
@@ -181,7 +181,7 @@ uv run --project driver_tests python -c "import redshift_connector"
 
 Expected: FAIL because `driver_tests/pyproject.toml` does not exist.
 
-- [ ] **Step 3: Create the investigation project**
+- [ ] **Step 2: Create the investigation project**
 
 Create `driver_tests/pyproject.toml`:
 
@@ -199,7 +199,7 @@ dependencies = [
 
 Create an empty `driver_tests/__init__.py`.
 
-- [ ] **Step 4: Lock and smoke-test the isolated project**
+- [ ] **Step 3: Lock and smoke-test the isolated project**
 
 Run:
 
@@ -297,7 +297,7 @@ uv run --project driver_tests --with redshift-connector==2.1.16 pytest driver_te
 uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tests/test_metadata_contract.py -v
 ```
 
-Expected: all four tests PASS.
+Expected: all metadata and DB-API contract tests PASS.
 
 - [ ] **Step 3: Run against the security floor**
 
@@ -307,7 +307,7 @@ Run:
 uv run --project driver_tests --with redshift-connector==2.1.14 pytest driver_tests/test_metadata_contract.py -v
 ```
 
-Expected: all four tests PASS.
+Expected: all metadata and DB-API contract tests PASS.
 
 ### Reference 3: Connection Option Crosswalk Prototype
 
@@ -605,7 +605,7 @@ def redact_connect_kwargs(kwargs):
     }
 ```
 
-- [ ] **Step 4: Run both driver releases**
+- [ ] **Step 4: Run all validation targets**
 
 Run:
 
@@ -919,10 +919,12 @@ every must-pass item below passes. Otherwise it must be exactly
 - Autocommit defaults and context-manager behavior are supported by AWS's
   public documentation/source evidence but are not integration-tested here.
 
-## Commands and results
+## Verification coverage and limitations
 
-- Record each exact uv command, package version, Python/Django version, test
-  count, and pass/fail result.
+- Describe the contracts and version combinations covered, plus unsupported or
+  unverified behavior and the limits of AWS-free evidence.
+- Keep exact execution commands, resolved versions, test counts, and per-run
+  pass/fail results in the PR discussion rather than this report.
 
 ## Sources
 
