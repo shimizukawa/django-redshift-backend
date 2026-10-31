@@ -1,7 +1,5 @@
 # Redshift Introspection Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Add database-free, AWS-driver-backed Redshift introspection to the internal backend so `inspectdb` can reconstruct ordinary table metadata.
 
 **Architecture:** `DatabaseIntrospection` converts the public `redshift_connector` metadata methods into Django `TableInfo`, `FieldInfo`, relations, and constraints. A narrow `information_schema` query supplies UNIQUE metadata unavailable from the driver. A Django-4.2 subclass adapts only the relation tuple shape; 5.2 and 6.x share the common implementation.
@@ -41,7 +39,6 @@
 ```python
 from django_redshift_backend import _backend
 
-
 def test_internal_backend_registers_redshift_introspection():
     assert _backend.DatabaseWrapper.introspection_class.__module__ == (
         "django_redshift_backend.introspection"
@@ -59,7 +56,6 @@ Expected: FAIL because `_backend` selects `BaseDatabaseIntrospection`.
 ```python
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
 
-
 class DatabaseIntrospection(BaseDatabaseIntrospection):
     pass
 ```
@@ -71,8 +67,6 @@ Import this class in `_backend.py` and assign it to `introspection_class`.
 Run the Step 2 command; it must pass. Then:
 
 ```bash
-git add django_redshift_backend/_backend.py django_redshift_backend/introspection.py driver_tests/test_introspection.py
-git commit -m "feat: register Redshift introspection"
 ```
 
 ### Task 2: Convert tables and columns from AWS Metadata API
@@ -94,7 +88,6 @@ def test_table_list_uses_driver_metadata_and_preserves_view_comment(introspectio
         TableInfo("order_summary", "v", "summary"),
     ]
     cursor.get_tables.assert_called_once_with(types=["TABLE", "VIEW"])
-
 
 def test_column_description_maps_identity_and_nullability(introspection, cursor):
     cursor.get_columns.return_value = (column_row("id", "int4", nullable="NO", identity="YES"),)
@@ -136,7 +129,6 @@ def test_constraints_group_primary_foreign_and_unique_metadata(introspection, cu
     assert constraints["orders_customer_fk"]["foreign_key"] == ("customer", "id")
     assert constraints["orders_code_key"]["unique"] is True
 
-
 def test_django42_relations_omit_on_delete_value(django42_introspection, cursor):
     cursor.get_imported_keys.return_value = imported_key_rows()
     assert django42_introspection.get_relations(cursor, "orders") == {"customer_id": ("id", "customer")}
@@ -171,7 +163,6 @@ def test_inspectdb_uses_internal_metadata_contract(internal_connection):
     output = run_inspectdb(internal_connection, "orders")
     assert "customer = models.ForeignKey('Customer', models.DO_NOTHING" in output
     assert "code = models.CharField(max_length=32, unique=True)" in output
-
 
 def test_public_backend_does_not_activate_internal_introspection():
     assert public_wrapper.introspection_class is not internal_wrapper.introspection_class
@@ -210,7 +201,3 @@ git diff --check
 ```
 
 Expected: each command exits 0.
-
-- [ ] **Step 3: Commit and verify again**
-
-Commit documentation and formatter output with `docs: record Redshift introspection evidence`, then run the exact Step 2 commands again and include their results in the PR description.
