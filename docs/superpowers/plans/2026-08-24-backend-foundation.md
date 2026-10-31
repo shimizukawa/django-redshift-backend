@@ -72,6 +72,7 @@ def test_connect_delegates_only_validated_keyword_arguments(monkeypatch):
     assert result is expected
     assert calls == [{"user": "alice", "password": "secret", "host": "example.test"}]
 
+
 def test_invalid_port_is_a_redacted_configuration_error():
     settings = {
         "USER": "alice",
@@ -106,8 +107,10 @@ import inspect
 import redshift_connector as Database
 from django.core.exceptions import ImproperlyConfigured
 
+
 def _configuration_error(message):
     raise ImproperlyConfigured(message)
+
 
 def connect(**kwargs):
     return Database.connect(**kwargs)
@@ -149,6 +152,7 @@ Update `driver_tests/test_django_exceptions.py`:
 
 ```python
 from django_redshift_backend.driver import Database
+
 
 class Wrapper:
     Database = Database
@@ -204,6 +208,7 @@ from django.db.utils import NotSupportedError
 from django_redshift_backend import driver
 from django_redshift_backend._backend import DatabaseWrapper
 
+
 class FakeCursor:
     def __init__(self, error=None):
         self.error = error
@@ -220,6 +225,7 @@ class FakeCursor:
             raise self.error
         self.executed.append(sql)
 
+
 class FakeConnection:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -227,6 +233,7 @@ class FakeConnection:
 
     def cursor(self):
         return self._cursor
+
 
 def settings_dict(**overrides):
     values = {
@@ -244,10 +251,12 @@ def settings_dict(**overrides):
     values.update(overrides)
     return values
 
+
 def test_wrapper_uses_public_base_backend():
     assert issubclass(DatabaseWrapper, BaseDatabaseWrapper)
     assert DatabaseWrapper.vendor == "redshift"
     assert DatabaseWrapper.Database is driver.Database
+
 
 def test_connection_params_use_password_contract():
     wrapper = DatabaseWrapper(settings_dict(), "default")
@@ -259,6 +268,7 @@ def test_connection_params_use_password_contract():
         "password": "secret",
     }
 
+
 def test_new_connection_delegates_to_driver(monkeypatch):
     wrapper = DatabaseWrapper(settings_dict(), "default")
     expected = object()
@@ -268,6 +278,7 @@ def test_new_connection_delegates_to_driver(monkeypatch):
     assert wrapper.get_new_connection(params) is expected
     assert calls == [params]
 
+
 def test_create_cursor_rejects_named_cursor():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(FakeCursor())
@@ -275,11 +286,13 @@ def test_create_cursor_rejects_named_cursor():
     with pytest.raises(NotSupportedError, match="named cursor"):
         wrapper.create_cursor(name="server-side")
 
+
 def test_autocommit_uses_public_driver_attribute():
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(FakeCursor())
     wrapper._set_autocommit(True)
     assert wrapper.connection.autocommit is True
+
 
 def test_init_connection_state_delegates_without_session_sql():
     wrapper = DatabaseWrapper(settings_dict(), "foundation-test")
@@ -289,12 +302,14 @@ def test_init_connection_state_delegates_without_session_sql():
     initialize.assert_called_once_with()
     assert wrapper.connection._cursor.executed == []
 
+
 def test_is_usable_executes_health_query():
     cursor = FakeCursor()
     wrapper = DatabaseWrapper(settings_dict(), "default")
     wrapper.connection = FakeConnection(cursor)
     assert wrapper.is_usable() is True
     assert cursor.executed == ["SELECT 1"]
+
 
 def test_is_usable_swallows_driver_error():
     cursor = FakeCursor(driver.Database.OperationalError("offline"))
@@ -328,6 +343,7 @@ from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.utils import NotSupportedError
 
 from . import driver
+
 
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = "redshift"
@@ -423,6 +439,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from django_redshift_backend.client import DatabaseClient
 
+
 def test_psql_arguments_and_environment_preserve_existing_contract():
     settings = {
         "NAME": "warehouse",
@@ -456,6 +473,7 @@ def test_psql_arguments_and_environment_preserve_existing_contract():
         "PGSSLKEY": "/tmp/client.key",
     }
 
+
 def test_service_omits_default_database_and_empty_environment_is_none():
     args, env = DatabaseClient.settings_to_cmd_args_env(
         {"NAME": "", "HOST": "", "PORT": "", "USER": "", "PASSWORD": "", "OPTIONS": {"service": "analytics"}},
@@ -464,6 +482,7 @@ def test_service_omits_default_database_and_empty_environment_is_none():
     assert args == ["psql"]
     assert env == {"PGSERVICE": "analytics"}
 
+
 def test_missing_name_and_service_uses_postgres_database():
     args, env = DatabaseClient.settings_to_cmd_args_env(
         {"NAME": "", "HOST": "", "PORT": "", "USER": "", "PASSWORD": "", "OPTIONS": {}},
@@ -471,6 +490,7 @@ def test_missing_name_and_service_uses_postgres_database():
     )
     assert args == ["psql", "postgres"]
     assert env is None
+
 
 def test_invalid_psql_sslmode_is_rejected():
     with pytest.raises(ImproperlyConfigured, match="Unsupported psql sslmode"):
@@ -498,6 +518,7 @@ Django's PostgreSQL client but no PostgreSQL backend import:
 from django.db.backends.base.client import BaseDatabaseClient
 
 from .driver import classify_dbshell_options
+
 
 class DatabaseClient(BaseDatabaseClient):
     executable_name = "psql"
@@ -546,6 +567,7 @@ In `django_redshift_backend/_backend.py`:
 ```python
 from .client import DatabaseClient
 
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     client_class = DatabaseClient
 ```
@@ -585,6 +607,7 @@ from django.db.utils import NotSupportedError
 
 from django_redshift_backend.creation import DatabaseCreation
 
+
 class ConnectionThatMustNotBeUsed:
     settings_dict = {"NAME": "warehouse"}
 
@@ -593,6 +616,7 @@ class ConnectionThatMustNotBeUsed:
 
     def close(self):
         raise AssertionError("test database rejection must happen before close")
+
 
 @pytest.mark.parametrize(
     ("method_name", "args"),
@@ -615,6 +639,7 @@ Create `driver_tests/test_activation_boundary.py`:
 
 ```python
 from pathlib import Path
+
 
 def test_existing_engine_entry_point_is_not_activated():
     base_source = (
@@ -646,6 +671,7 @@ Create `django_redshift_backend/creation.py`:
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.utils import NotSupportedError
 
+
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(
         self, verbosity=1, autoclobber=False, serialize=None, keepdb=False
@@ -672,6 +698,7 @@ In `django_redshift_backend/_backend.py`:
 ```python
 from .creation import DatabaseCreation
 
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     creation_class = DatabaseCreation
 ```
@@ -681,6 +708,7 @@ Remove the unused `BaseDatabaseCreation` import and add to
 
 ```python
 from django_redshift_backend.creation import DatabaseCreation
+
 
 def test_wrapper_registers_foundation_components():
     wrapper = DatabaseWrapper(settings_dict(), "default")
