@@ -3,6 +3,104 @@
 **Goal:** Produce a reviewable GO/NO-GO decision for adopting AWS's public
 `redshift_connector` DB-API without activating the redesigned backend.
 
+## Acceptance criteria
+
+| Area | Required outcome |
+| --- | --- |
+| DB-API and exceptions | Public DB-API contracts and Django exception translation are available without an adapter. |
+| Settings and authentication | Setting precedence is explicit; unsupported authentication is rejected before connection; secrets are redacted. |
+| Connection and cursor | Required lifecycle, execution, fetching, and result-metadata APIs are public; unsupported named cursors are identified. |
+| Version compatibility | Contracts pass on the supported Python/Django matrix with driver 2.1.14, 2.1.16, and 2.2.0 coverage. |
+| Adoption constraints | License, security, and dependency findings support adoption; unverified integration behavior is explicitly identified. |
+
+## Verification checklist
+
+The checklist states what must be demonstrated. The implementation references
+below retain the code examples, exact commands, and detailed expectations.
+Normal verification is AWS-free and must not open a socket.
+
+### 1. Isolated investigation harness
+
+**Purpose:** Run public driver contracts independently of the existing backend's
+runtime dependencies and database fixtures.
+
+**Pass condition:** The uv project resolves and loads the selected public driver.
+The harness is kept under `driver_tests/`; this layer does not activate the driver
+through the public backend entry point.
+
+**Verification:** Lock the isolated project and inspect its selected driver
+version. [Project definition and smoke-test commands](#reference-1-isolated-uv-investigation-harness).
+
+### 2. Package metadata and DB-API
+
+**Purpose:** Establish the public driver surface required by Django.
+
+**Pass condition:** Python metadata and driver versions satisfy the declared
+bounds; DB-API constants, exception hierarchy, and constructors meet the contracts.
+
+**Verification:** Run `driver_tests/test_metadata_contract.py` against 2.1.14,
+2.1.16, and 2.2.0. [Test examples and exact commands](#reference-2-package-metadata-and-db-api-contract).
+
+### 3. Connection settings and authentication
+
+**Purpose:** Map Django settings to public driver arguments safely and predictably.
+
+**Pass condition:** Standard-setting precedence, required username/password,
+option classification, deferred-authentication rejection, and secret redaction
+are covered by tests. Invalid settings are rejected before a socket is opened.
+
+**Verification:** Run `driver_tests/test_connect_options.py` for all three driver
+versions. [Option crosswalk, examples, and commands](#reference-3-connection-option-crosswalk-prototype).
+
+### 4. Django exception translation
+
+**Purpose:** Use Django's standard exception wrapper without a compatibility adapter.
+
+**Pass condition:** All nine required driver exception names translate to their
+Django equivalents with the expected connection-error state.
+
+**Verification:** Run `driver_tests/test_django_exceptions.py` on Django 4.2, 5.2,
+6.0, and 6.1. [Exception test and commands](#reference-4-django-exception-translation-contract).
+
+### 5. Connection and cursor surface
+
+**Purpose:** Confirm the public synchronous interfaces needed by the backend.
+
+**Pass condition:** Connection/cursor signatures, context management, execution,
+fetching, and result metadata meet the contracts. The lack of a public named-cursor
+argument is recorded as a limitation rather than hidden by private APIs.
+
+**Verification:** Run `driver_tests/test_connection_cursor_contract.py` for all
+three driver versions. [Surface tests and commands](#reference-5-public-connection-cursor-and-type-surface).
+
+### 6. Supported-version matrix
+
+**Purpose:** Verify compatibility across the supported Python/Django combinations.
+
+**Pass condition:** Every blocking matrix job passes, including the 2.1.14
+security floor and explicit 2.1.16/2.2.0 targets, without AWS credentials.
+
+**Verification:** Run the driver-contract workflow and its representative local
+commands. [Complete matrix and commands](#reference-6-aws-free-compatibility-matrix).
+
+### 7. Adoption decision
+
+**Purpose:** Make the password-only adoption decision from contract and dependency evidence.
+
+**Pass condition:** Record one GO/NO-GO decision supported by license, security,
+dependency, and public-contract findings. Identify unsupported authentication and
+unverified real-Redshift behavior separately; do not infer integration support
+from AWS-free tests.
+
+**Verification:** Apply the decision rule to the preceding checks and record the
+findings. [Report template, evidence requirements, and decision rule](#reference-7-evidence-report-and-gono-go-gate).
+
+## Implementation reference
+
+Use these details when implementing or checking an individual contract. They
+preserve the dependency requirements, code examples, commands, and limitations
+behind the checklist above.
+
 **Architecture:** Keep the investigation harness under `driver_tests/`, isolated
 from the current package's `django<5.2` dependency and database-dependent
 fixtures. Test only public driver APIs, model the future Django settings
@@ -14,7 +112,7 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-08-23-redshift-backend-redesign-design.md`
 
-## Global Constraints
+### Global Constraints
 
 - Use uv for every environment, dependency, and test command.
 - Do not import or depend on a private `redshift_connector` module or member.
@@ -41,7 +139,7 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
 
 ---
 
-## File Structure
+### File Structure
 
 - `driver_tests/pyproject.toml`: isolated uv project for the investigation.
 - `driver_tests/uv.lock`: exact investigation dependency resolution.
@@ -61,7 +159,7 @@ pytest, `redshift_connector` 2.1.14, 2.1.16, and 2.2.0, GitHub Actions.
   evidence, dependency and license review, option crosswalk, deferred checks,
   and final GO/NO-GO decision.
 
-### Task 1: Isolated uv Investigation Harness
+### Reference 1: Isolated uv Investigation Harness
 
 **Files:**
 - Create: `driver_tests/pyproject.toml`
@@ -114,7 +212,7 @@ Expected: the lock succeeds and the command prints the version selected by
 the committed lockfile. Explicit version overrides below verify all three
 compatibility targets independently of the lockfile default.
 
-### Task 2: Package Metadata and DB-API Contract
+### Reference 2: Package Metadata and DB-API Contract
 
 **Files:**
 - Create: `driver_tests/test_metadata_contract.py`
@@ -211,7 +309,7 @@ uv run --project driver_tests --with redshift-connector==2.1.14 pytest driver_te
 
 Expected: all four tests PASS.
 
-### Task 3: Connection Option Crosswalk Prototype
+### Reference 3: Connection Option Crosswalk Prototype
 
 **Files:**
 - Create: `driver_tests/option_contract.py`
@@ -519,7 +617,7 @@ uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tes
 
 Expected: all parameterized cases PASS for all three driver versions.
 
-### Task 4: Django Exception Translation Contract
+### Reference 4: Django Exception Translation Contract
 
 **Files:**
 - Create: `driver_tests/test_django_exceptions.py`
@@ -592,7 +690,7 @@ uv run --python 3.12 --project driver_tests --with "Django~=6.1.0" pytest driver
 
 Expected: all nine cases PASS on both Django versions.
 
-### Task 5: Public Connection, Cursor, and Type Surface
+### Reference 5: Public Connection, Cursor, and Type Surface
 
 **Files:**
 - Create: `driver_tests/test_connection_cursor_contract.py`
@@ -661,7 +759,7 @@ uv run --project driver_tests --with redshift-connector==2.2.0 pytest driver_tes
 Expected: all three tests PASS. The named-cursor test records an explicit
 limitation rather than a failure.
 
-### Task 6: AWS-Free Compatibility Matrix
+### Reference 6: AWS-Free Compatibility Matrix
 
 **Files:**
 - Create: `.github/workflows/driver-contract.yml`
@@ -734,7 +832,7 @@ uv run --python 3.12 --project driver_tests --with Django==5.2.8 --with redshift
 
 Expected: all tests PASS in all four representative environments.
 
-### Task 7: Evidence Report and GO/NO-GO Gate
+### Reference 7: Evidence Report and GO/NO-GO Gate
 
 **Files:**
 - Create: `docs/superpowers/research/2026-08-23-redshift-connector-investigation.md`
