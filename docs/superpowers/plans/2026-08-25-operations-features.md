@@ -1,7 +1,5 @@
 # Operations and Features Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Add a documented, AWS-free Redshift operations and feature layer that fixes issue #171, adopts pull request #103's complete conflict-handling intent, and remains inactive through the public backend entry point.
 
 **Architecture:** `features.py` and `operations.py` inherit only Django's public base-backend classes and are registered only by the internal `_backend.DatabaseWrapper`. Feature flags are conservative and evidence-backed; SQL methods preserve parameters and reject PostgreSQL-only syntax before execution. `base.py` remains the active engine until the final stack layer.
@@ -51,7 +49,6 @@ from django.db.backends.base.features import BaseDatabaseFeatures
 from django_redshift_backend._backend import DatabaseWrapper
 from django_redshift_backend.features import DatabaseFeatures
 
-
 def settings_dict():
     return {
         "NAME": "warehouse",
@@ -66,16 +63,13 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def test_features_use_public_base_class():
     assert issubclass(DatabaseFeatures, BaseDatabaseFeatures)
-
 
 def test_internal_wrapper_registers_redshift_features():
     wrapper = DatabaseWrapper(settings_dict(), "feature-contract")
     assert wrapper.features_class is DatabaseFeatures
     assert isinstance(wrapper.features, DatabaseFeatures)
-
 
 @pytest.mark.parametrize(
     ("name", "expected"),
@@ -162,7 +156,6 @@ def test_redshift_feature_contract(name, expected):
     wrapper = DatabaseWrapper(settings_dict(), "feature-contract")
     assert getattr(wrapper.features, name) is expected
 
-
 def test_redshift_explain_formats_are_text_only():
     wrapper = DatabaseWrapper(settings_dict(), "feature-contract")
     assert wrapper.features.supported_explain_formats == set()
@@ -172,7 +165,6 @@ Extend `driver_tests/test_backend_wrapper.py` imports and registration test:
 
 ```python
 from django_redshift_backend.features import DatabaseFeatures
-
 
 def test_wrapper_registers_foundation_components():
     wrapper = DatabaseWrapper(settings_dict(), "default")
@@ -197,7 +189,6 @@ Create `django_redshift_backend/features.py`:
 
 ```python
 from django.db.backends.base.features import BaseDatabaseFeatures
-
 
 class DatabaseFeatures(BaseDatabaseFeatures):
     supports_transactions = True
@@ -296,7 +287,6 @@ Modify `_backend.py`:
 ```python
 from .features import DatabaseFeatures
 
-
 class DatabaseWrapper(BaseDatabaseWrapper):
     features_class = DatabaseFeatures
 ```
@@ -313,15 +303,6 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 ```
 
 Expected: both commands pass with the same feature manifest.
-
-- [ ] **Step 5: Commit the feature contract**
-
-```powershell
-git add django_redshift_backend/features.py django_redshift_backend/_backend.py driver_tests/test_features.py driver_tests/test_backend_wrapper.py
-git commit -m "feat: declare Redshift feature contracts"
-```
-
----
 
 ### Task 2: Implement modern date/time operations and issue #171 regression
 
@@ -344,7 +325,6 @@ Create `driver_tests/conftest.py`:
 import django
 from django.conf import settings
 
-
 def pytest_configure():
     if not settings.configured:
         settings.configure(
@@ -366,7 +346,6 @@ from django.test import override_settings
 from django_redshift_backend._backend import DatabaseWrapper
 from django_redshift_backend.operations import DatabaseOperations
 
-
 def settings_dict():
     return {
         "NAME": "warehouse",
@@ -381,34 +360,28 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def operations():
     return DatabaseWrapper(settings_dict(), "datetime-contract").ops
-
 
 def test_internal_wrapper_registers_redshift_operations():
     wrapper = DatabaseWrapper(settings_dict(), "datetime-contract")
     assert wrapper.ops_class is DatabaseOperations
     assert isinstance(wrapper.ops, DatabaseOperations)
 
-
 def test_date_extract_preserves_params():
     sql, params = operations().date_extract_sql("month", "event_time + %s", (7,))
     assert sql == "EXTRACT(MONTH FROM event_time + %s)"
     assert params == (7,)
-
 
 def test_django_weekday_numbering_uses_documented_dow():
     sql, params = operations().date_extract_sql("week_day", "event_time", ())
     assert sql == "EXTRACT(DOW FROM event_time) + 1"
     assert params == ()
 
-
 def test_iso_weekday_uses_documented_dow_composition():
     sql, params = operations().date_extract_sql("iso_week_day", "event_time", ())
     assert sql == "MOD(EXTRACT(DOW FROM event_time) + 6, 7) + 1"
     assert params == ()
-
 
 def test_iso_year_uses_week_thursday():
     sql, params = operations().date_extract_sql("iso_year", "event_time", ())
@@ -416,7 +389,6 @@ def test_iso_year_uses_week_thursday():
         "EXTRACT(YEAR FROM DATE_TRUNC('week', event_time) + INTERVAL '3 day')"
     )
     assert params == ()
-
 
 def test_date_extract_rejects_untrusted_lookup():
     try:
@@ -426,12 +398,10 @@ def test_date_extract_rejects_untrusted_lookup():
     else:
         raise AssertionError("invalid date part was accepted")
 
-
 def test_date_trunc_parameterizes_date_part():
     sql, params = operations().date_trunc_sql("day", "event_time + %s", (7,))
     assert sql == "DATE_TRUNC(%s, event_time + %s)"
     assert params == ("day", 7)
-
 
 @override_settings(USE_TZ=True)
 def test_datetime_trunc_parameterizes_timezone():
@@ -440,7 +410,6 @@ def test_datetime_trunc_parameterizes_timezone():
     )
     assert sql == "DATE_TRUNC(%s, event_time + %s AT TIME ZONE %s)"
     assert params == ("hour", 7, "Asia/Tokyo")
-
 
 @override_settings(USE_TZ=True)
 def test_datetime_casts_preserve_timezone_params():
@@ -455,7 +424,6 @@ def test_datetime_casts_preserve_timezone_params():
     assert date_params == ("Asia/Tokyo",)
     assert time_sql == "(event_time AT TIME ZONE %s)::time"
     assert time_params == ("Asia/Tokyo",)
-
 
 def test_time_extract_and_trunc_use_modern_signatures():
     ops = operations()
@@ -482,12 +450,10 @@ from django.db.models.sql.query import Query
 
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 class TemporalEvent(models.Model):
     class Meta:
         app_label = "driver_contract"
         managed = False
-
 
 def settings_dict():
     return {
@@ -502,7 +468,6 @@ def settings_dict():
         "CONN_HEALTH_CHECKS": False,
         "AUTOCOMMIT": True,
     }
-
 
 def test_trunc_expression_compiles_through_django_orm():
     wrapper = DatabaseWrapper(settings_dict(), "issue-171")
@@ -541,7 +506,6 @@ import re
 from django.conf import settings
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.utils import split_tzname_delta
-
 
 class DatabaseOperations(BaseDatabaseOperations):
     _extract_format_re = re.compile(r"[A-Z_]+\Z")
@@ -614,7 +578,6 @@ Modify `_backend.py`:
 ```python
 from .operations import DatabaseOperations
 
-
 class DatabaseWrapper(BaseDatabaseWrapper):
     ops_class = DatabaseOperations
 ```
@@ -631,15 +594,6 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 ```
 
 Expected: both pass; the ORM test reaches `DatabaseOperations.datetime_trunc_sql()` without the issue #171 `TypeError`.
-
-- [ ] **Step 7: Commit the date/time layer**
-
-```powershell
-git add django_redshift_backend/operations.py django_redshift_backend/_backend.py driver_tests/conftest.py driver_tests/test_operations_datetime.py driver_tests/test_issue_171.py
-git commit -m "feat: add modern Redshift date operations"
-```
-
----
 
 ### Task 3: Preserve supported general operations and reject PostgreSQL syntax
 
@@ -669,7 +623,6 @@ from django.db.utils import NotSupportedError
 
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 def settings_dict():
     return {
         "NAME": "warehouse",
@@ -684,10 +637,8 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def operations():
     return DatabaseWrapper(settings_dict(), "operations-contract").ops
-
 
 class FakeCursor:
     def __init__(self, row=(42,)):
@@ -700,28 +651,23 @@ class FakeCursor:
     def fetchone(self):
         return self.row
 
-
 def test_quote_name_quotes_once():
     ops = operations()
     assert ops.quote_name("event") == '"event"'
     assert ops.quote_name('"event"') == '"event"'
 
-
 def test_plain_distinct_is_supported():
     assert operations().distinct_sql([], []) == (["DISTINCT"], [])
-
 
 def test_field_specific_distinct_remains_unsupported():
     with pytest.raises(NotSupportedError, match="DISTINCT ON fields"):
         operations().distinct_sql(['"event"."kind"'], [[]])
-
 
 def test_last_insert_id_preserves_quoted_max_workaround():
     cursor = FakeCursor()
     result = operations().last_insert_id(cursor, "event table", "event id")
     assert result == 42
     assert cursor.calls == ['SELECT MAX("event id") FROM "event table"']
-
 
 def test_select_for_update_is_explicitly_unsupported():
     with pytest.raises(NotSupportedError, match="SELECT FOR UPDATE"):
@@ -732,13 +678,11 @@ def test_select_for_update_is_explicitly_unsupported():
             no_key=True,
         )
 
-
 def test_sequence_and_deferrable_operations_are_empty():
     ops = operations()
     assert ops.sequence_reset_sql(no_style(), []) == []
     assert ops.sequence_reset_by_name_sql(no_style(), []) == []
     assert ops.deferrable_sql() == ""
-
 
 def test_compatibility_name_limit_is_preserved():
     assert operations().max_name_length() == 63
@@ -755,7 +699,6 @@ class CustomJSONEncoder(json.JSONEncoder):
             return sorted(value)
         return super().default(value)
 
-
 def test_json_integer_and_ip_values_use_driver_neutral_types():
     ops = operations()
     assert ops.adapt_integerfield_value(7, "IntegerField") == 7
@@ -766,7 +709,6 @@ def test_json_integer_and_ip_values_use_driver_neutral_types():
         "192.0.2.1"
     )
     assert ops.adapt_ipaddressfield_value("") is None
-
 
 def test_uuid_converter_accepts_text_uuid_and_none():
     ops = operations()
@@ -779,7 +721,6 @@ def test_uuid_converter_accepts_text_uuid_and_none():
     assert ops.convert_uuidfield_value(str(value), expression, ops.connection) == value
     assert ops.convert_uuidfield_value(value, expression, ops.connection) == value
     assert ops.convert_uuidfield_value(None, expression, ops.connection) is None
-
 
 def test_non_uuid_expression_has_no_redshift_converter():
     expression = SimpleNamespace(output_field=IntegerField())
@@ -799,7 +740,6 @@ def test_bulk_insert_uses_multi_row_values_without_conflict_clause():
     assert sql == "VALUES (%s, %s), (%s, %s)"
     assert "CONFLICT" not in sql
 
-
 def test_flush_uses_one_redshift_statement_per_table():
     sql = operations().sql_flush(
         no_style(),
@@ -814,7 +754,6 @@ def test_flush_uses_one_redshift_statement_per_table():
     assert all("RESTART IDENTITY" not in statement for statement in sql)
     assert all("CASCADE" not in statement for statement in sql)
 
-
 def test_explain_supports_only_plain_and_verbose():
     ops = operations()
     assert ops.explain_query_prefix() == "EXPLAIN"
@@ -823,7 +762,6 @@ def test_explain_supports_only_plain_and_verbose():
         ops.explain_query_prefix(format="JSON")
     with pytest.raises(ValueError, match="Unknown options: ANALYZE"):
         ops.explain_query_prefix(analyze=True)
-
 
 @pytest.mark.parametrize("internal_type", ["DateField", "DateTimeField", "TimeField"])
 def test_temporal_subtraction_uses_microsecond_datediff(internal_type):
@@ -839,7 +777,6 @@ def test_temporal_subtraction_uses_microsecond_datediff(internal_type):
     )
     assert params == (2, 1)
 
-
 def test_join_preparation_does_not_add_postgresql_casts():
     ops = operations()
     lhs_field = IntegerField()
@@ -849,7 +786,6 @@ def test_join_preparation_does_not_add_postgresql_casts():
     assert lhs.target is lhs_field
     assert rhs.alias == "rhs"
     assert rhs.target is rhs_field
-
 
 def test_default_compiler_remains_in_use():
     assert operations().compiler_module == "django.db.models.sql.compiler"
@@ -869,12 +805,10 @@ from django.db.models.sql.query import Query
 
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 class Event(models.Model):
     class Meta:
         app_label = "driver_contract"
         managed = False
-
 
 def settings_dict():
     return {
@@ -890,7 +824,6 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def compile_subtraction(lhs_value, lhs_field, rhs_value, rhs_field):
     wrapper = DatabaseWrapper(settings_dict(), "temporal-subtraction")
     query = Query(Event)
@@ -901,7 +834,6 @@ def compile_subtraction(lhs_value, lhs_field, rhs_value, rhs_field):
     ).resolve_expression(query)
     sql, params = compiler.compile(expression)
     return sql, tuple(params)
-
 
 @pytest.mark.parametrize(
     ("lhs_value", "rhs_value", "field", "expected_params"),
@@ -940,7 +872,6 @@ def test_same_type_temporal_subtraction_compiles_to_interval(
         "(INTERVAL '1 microsecond' * DATEDIFF(microsecond, (%s), (%s)))"
     )
     assert params == expected_params
-
 
 @pytest.mark.parametrize(
     ("lhs_value", "lhs_field", "rhs_value", "rhs_field", "expected_params"),
@@ -1004,7 +935,6 @@ import uuid
 
 from django.db.models.expressions import Col
 from django.db.utils import NotSupportedError
-
 
 class DatabaseOperations(BaseDatabaseOperations):
     explain_prefix = "EXPLAIN"
@@ -1117,15 +1047,6 @@ uv --cache-dir .uv-cache run --python 3.14 --project driver_tests --with "Django
 
 Expected: all pass with identical SQL contracts.
 
-- [ ] **Step 7: Commit the general operation contract**
-
-```powershell
-git add django_redshift_backend/operations.py driver_tests/test_operations.py driver_tests/test_temporal_subtraction.py
-git commit -m "feat: add Redshift operation contracts"
-```
-
----
-
 ### Task 4: Reproduce issue #102 and adopt pull request #103 behavior
 
 **Files:**
@@ -1151,18 +1072,15 @@ from django.db.utils import NotSupportedError
 
 from django_redshift_backend._backend import DatabaseWrapper
 
-
 class Target(models.Model):
     class Meta:
         app_label = "driver_contract"
-
 
 class Source(models.Model):
     targets = models.ManyToManyField(Target)
 
     class Meta:
         app_label = "driver_contract"
-
 
 def settings_dict():
     return {
@@ -1178,11 +1096,9 @@ def settings_dict():
         "AUTOCOMMIT": True,
     }
 
-
 def fake_connections():
     wrapper = DatabaseWrapper(settings_dict(), "redshift-contract")
     return {"redshift-contract": SimpleNamespace(features=wrapper.features)}
-
 
 def test_explicit_ignore_conflicts_fails_before_sql(monkeypatch):
     monkeypatch.setattr(query_module, "connections", fake_connections())
@@ -1208,7 +1124,6 @@ def test_many_to_many_add_uses_existing_row_precheck(monkeypatch):
     assert can_ignore_conflicts is False
     assert must_send_signals is False
     assert can_fast_add is False
-
 
 def test_no_operation_generates_on_conflict():
     wrapper = DatabaseWrapper(settings_dict(), "redshift-contract")
@@ -1240,15 +1155,6 @@ Expected: all tests pass without a database connection. `_get_add_plan()` is use
 only as test instrumentation for Django's public ManyToMany `add()` path; no
 private Django helper is imported or called by production code.
 
-- [ ] **Step 5: Commit the PR #103 regressions**
-
-```powershell
-git add driver_tests/test_conflict_contract.py
-git commit -m "test: preserve Redshift conflict behavior"
-```
-
----
-
 ### Task 5: Prove activation and compatibility boundaries
 
 **Files:**
@@ -1271,10 +1177,8 @@ from django_redshift_backend import _backend, base
 from django_redshift_backend.features import DatabaseFeatures
 from django_redshift_backend.operations import DatabaseOperations
 
-
 def test_existing_engine_entry_point_is_not_activated():
     assert base.DatabaseWrapper is not _backend.DatabaseWrapper
-
 
 def test_new_components_are_internal_only():
     assert _backend.DatabaseWrapper.features_class is DatabaseFeatures
@@ -1282,11 +1186,9 @@ def test_new_components_are_internal_only():
     assert base.DatabaseWrapper.features_class is not DatabaseFeatures
     assert base.DatabaseWrapper.ops_class is not DatabaseOperations
 
-
 def test_new_components_use_only_public_base_classes():
     assert issubclass(DatabaseFeatures, BaseDatabaseFeatures)
     assert issubclass(DatabaseOperations, BaseDatabaseOperations)
-
 
 def test_pull_request_104_compiler_copy_is_not_activated():
     assert DatabaseOperations.compiler_module == "django.db.models.sql.compiler"
@@ -1299,7 +1201,6 @@ Ensure `driver_tests/test_backend_wrapper.py` imports and asserts both new class
 ```python
 from django_redshift_backend.features import DatabaseFeatures
 from django_redshift_backend.operations import DatabaseOperations
-
 
 def test_wrapper_registers_foundation_components():
     wrapper = DatabaseWrapper(settings_dict(), "default")
@@ -1326,23 +1227,13 @@ Expected: all three suites pass without AWS, PostgreSQL, Redshift, or `psql`.
 Run:
 
 ```powershell
-git diff redesign/02-backend-foundation -- django_redshift_backend/base.py django_redshift_backend/meta.py django_redshift_backend/distkey.py pyproject.toml .github/workflows/driver-contract.yml
 rg -n "django\.db\.backends\.postgresql|django_redshift_backend\._vendor" django_redshift_backend/features.py django_redshift_backend/operations.py django_redshift_backend/_backend.py
 rg -n "compiler_module\s*=" django_redshift_backend
 ```
 
 Expected: the first two commands have no output. The compiler search finds no new project override; inherited references under the untouched vendored/current backend do not count as redesigned-component use.
 
-- [ ] **Step 5: Commit the activation boundary**
-
-```powershell
-git add driver_tests/test_activation_boundary.py driver_tests/test_backend_wrapper.py
-git commit -m "test: lock operations activation boundary"
-```
-
----
-
-### Task 6: Run the full matrix and prepare stacked PR evidence
+### Task 6: Verify the complete component contracts
 
 **Files:**
 - Modify only if verification exposes a defect in Tasks 1-5.
@@ -1350,7 +1241,7 @@ git commit -m "test: lock operations activation boundary"
 
 **Interfaces:**
 - Consumes: the completed branch and existing GitHub Actions matrix.
-- Produces: fresh verification evidence, a clean branch, and the PR/tracking text used by the finishing workflow.
+- Produces: supported-version, package, and public-API compatibility checks.
 
 - [ ] **Step 1: Run all 15 workflow cells exactly**
 
@@ -1407,23 +1298,8 @@ Expected: build and twine checks pass; the wheel contains `features.py` and `ope
 ```powershell
 rg -n "import redshift_connector|from redshift_connector" django_redshift_backend -g "*.py"
 rg -n "django\.db\.backends\.postgresql|django_redshift_backend\._vendor" django_redshift_backend/features.py django_redshift_backend/operations.py django_redshift_backend/_backend.py
-git diff redesign/02-backend-foundation -- django_redshift_backend/base.py django_redshift_backend/meta.py django_redshift_backend/distkey.py pyproject.toml .github/workflows/driver-contract.yml
 git diff --check
 git status --short
 ```
 
 Expected: only `driver.py` imports `redshift_connector`; redesigned components have no PostgreSQL or vendored imports; forbidden files are unchanged; diff check passes; status is clean.
-
-- [ ] **Step 5: Prepare the operations and feature contracts for review**
-
-Describe the operation signatures, supported capabilities, intentional
-compatibility corrections, and unchanged public entry point in the PR.
-Link its dependencies using current PR URLs. Record observed test results and
-delivery progress in the PR discussion rather than this implementation plan.
-
-- [ ] **Step 6: Stop for the finishing workflow**
-
-Do not push or create a PR from this task automatically. Invoke
-`superpowers:verification-before-completion`, then
-`superpowers:finishing-a-development-branch` and follow the user's selected
-integration option.
