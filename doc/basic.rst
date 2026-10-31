@@ -11,20 +11,15 @@ Please install django-redshift-backend with using pip (8.1.1 or later).
 
    $ pip install django-redshift-backend
 
-This backend requires ``psycopg2``, which may be installed from source or wheel (pre-built binaries).
-If you don't want to specify it separately, you may install it using extra:
+This backend uses AWS's official ``redshift-connector`` Python driver, which
+is installed automatically with this package:
 
 .. code-block:: bash
 
-   # For pre-built binary
-   $ pip install django-redshift-backend[psycopg2-binary]
+   $ pip install django-redshift-backend
 
-   # For the source distribution
-   $ pip install django-redshift-backend[psycopg2]
-
-Please refer to the `psycopg2 documentation`_ for more details on the topic.
-
-.. _psycopg2 documentation: https://www.psycopg.org/docs/install.html#psycopg-vs-psycopg-binary
+The initial 6.0 release supports username/password authentication. IAM and
+identity-provider authentication are deferred.
 
 Django settings
 ===============
@@ -43,4 +38,21 @@ ENGINE for DATABASES is 'django_redshift_backend'. You can set the name in your 
    }
 
 For more information, please refer :doc:`refs`.
+
+TLS verification
+================
+
+When ``OPTIONS['sslmode']`` is omitted, the installed ``redshift-connector``
+version determines TLS verification. Version 2.2.0 changes the default from
+``verify-ca`` (certificate-chain verification) to ``verify-full`` (also checks
+the hostname). In 2.2.0, an omitted mode permits a hostname mismatch with a
+warning; AWS plans to reject such mismatches in a future release.
+
+Set ``OPTIONS = {'sslmode': 'verify-full'}`` to require both certificate-chain
+and hostname verification explicitly. A mismatch then fails the connection.
+Explicit ``verify-ca`` is also supported. These settings apply when TLS is
+enabled; use the actual Redshift endpoint hostname for the connection.
+
+See the `AWS connector changelog
+<https://github.com/aws/amazon-redshift-python-driver/blob/master/CHANGELOG.md>`_.
 
