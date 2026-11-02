@@ -5,8 +5,8 @@ References
 .. contents::
    :local:
 
-Differences from postgres_psycopg2 backend
-==========================================
+Redshift SQL differences
+========================
 
 Type mapping:
 
