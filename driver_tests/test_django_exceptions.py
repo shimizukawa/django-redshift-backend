@@ -15,6 +15,7 @@ EXCEPTION_NAMES = (
     "NotSupportedError",
 )
 
+
 @pytest.mark.parametrize("name", EXCEPTION_NAMES)
 def test_django_translates_public_driver_exception(name):
     wrapper = DatabaseWrapper.__new__(DatabaseWrapper)
