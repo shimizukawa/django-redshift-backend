@@ -1,7 +1,5 @@
 from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.introspection import BaseDatabaseIntrospection
-from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.utils import CursorDebugWrapper, CursorWrapper
 from django.db.utils import NotSupportedError
@@ -9,6 +7,8 @@ from django.db.utils import NotSupportedError
 from . import driver
 from .client import DatabaseClient
 from .creation import DatabaseCreation
+from .features import DatabaseFeatures
+from .operations import DatabaseOperations
 
 
 class FetchmanyListMixin:
@@ -31,9 +31,9 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     client_class = DatabaseClient
     creation_class = DatabaseCreation
-    features_class = BaseDatabaseFeatures
+    features_class = DatabaseFeatures
     introspection_class = BaseDatabaseIntrospection
-    ops_class = BaseDatabaseOperations
+    ops_class = DatabaseOperations
     SchemaEditorClass = BaseDatabaseSchemaEditor
 
     data_types = {}
@@ -54,6 +54,18 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         "endswith": "LIKE %s",
         "istartswith": "LIKE UPPER(%s)",
         "iendswith": "LIKE UPPER(%s)",
+    }
+    pattern_esc = (
+        "REPLACE(REPLACE(REPLACE({}, CHR(92), CHR(92) || CHR(92)), "
+        "'%', CHR(92) || '%'), '_', CHR(92) || '_')"
+    )
+    pattern_ops = {
+        "contains": "LIKE '%' || {} || '%'",
+        "icontains": "LIKE '%' || UPPER({}) || '%'",
+        "startswith": "LIKE {} || '%'",
+        "istartswith": "LIKE UPPER({}) || '%'",
+        "endswith": "LIKE '%' || {}",
+        "iendswith": "LIKE '%' || UPPER({})",
     }
 
     def get_connection_params(self):
