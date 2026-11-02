@@ -1,0 +1,167 @@
+# Live Redshift validation environment
+
+This Python CDK application creates a temporary Amazon Redshift Serverless
+environment for manual investigation before release. Deployment is never part
+of ordinary CI. The human operator owns both `cdk deploy` and `cdk destroy`.
+
+## Operator sequence
+
+1. [Prepare the account, tools, and password](#prerequisites).
+2. [Deploy](#deploy), then [connect and investigate](#connect-and-investigate).
+3. [Destroy and verify resource removal](#destroy-and-verify), including after failure.
+
+## Prerequisites
+
+### Tools and credentials
+
+- AWS CLI v2 authenticated to the intended personal AWS account.
+- AWS CDK CLI v2 and Node.js installed.
+- `uv` and Python 3.12 or later.
+### Target and temporary password
+
+- A temporary `DB_PASSWORD` value set before any CDK command, including
+  `cdk bootstrap`, because the CDK CLI evaluates this application to determine
+  its target environment. It must be 8-64 printable ASCII characters, include
+  at least one uppercase letter, one lowercase letter, and one number, and must
+  not contain single quotes, double quotes, backslashes, slashes, or `@`.
+- A Region supported by this app's 4-RPU allowlist.
+- VPC Block Public Access configured to permit a public workgroup in the
+  dedicated VPC.
+- Current Redshift Serverless compute and managed-storage pricing reviewed
+  before deployment: <https://aws.amazon.com/redshift/pricing/>.
+
+Confirm the target before creating anything:
+
+```powershell
+aws sts get-caller-identity
+aws configure get region
+$env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
+Push-Location examples/cdk
+uv sync --locked --all-groups
+cdk bootstrap
+Pop-Location
+```
+
+`CDKToolkit` is a retained, account/Region-level prerequisite. It can contain
+S3, ECR, and IAM resources and is not removed with this validation stack.
+
+## Deploy
+
+Use the same temporary password set before bootstrap. If this is a new shell,
+set it again before deployment:
+
+```powershell
+$env:DB_PASSWORD = Read-Host 'Temporary Redshift password'
+Push-Location examples/cdk
+cdk deploy
+Pop-Location
+```
+
+The app obtains the current public IPv4 address during synthesis and permits
+only that `/32` on TCP 5439. Rerun `cdk deploy` if the public address changes.
+The password is not a CloudFormation output, but it is embedded in the local
+`cdk.out/` assembly and the deployed CloudFormation template. Treat both as
+temporary sensitive data and never upload or commit them.
+
+Deployment outputs contain the endpoint address, port, database, username,
+namespace, workgroup, and accepted CIDR. They never contain the password.
+
+## Connect and investigate
+
+`examples/proj1/config/settings.py` already reads `DATABASE_URL` from the
+environment or an `ENV_FILE`. From the repository root, substitute the
+non-secret deployment outputs:
+
+```powershell
+$encodedPassword = [uri]::EscapeDataString($env:DB_PASSWORD)
+$env:DATABASE_URL = "redshift://validation_admin:${encodedPassword}@<endpoint>:5439/validation"
+$env:SECRET_KEY = 'temporary-live-validation-key'
+uv run --directory examples/proj1 --frozen python manage.py check
+```
+
+The same values may be placed in an ignored `.env` file. Never commit that
+file. There is deliberately no required validation command: a human or AI
+agent may run the Django commands, ORM probes, SQL inspection, or reproduction
+scripts relevant to the current investigation. Record the exact commands and
+sanitized results in the live-validation PR checklist.
+
+All validation data must remain in this disposable namespace. Clean up objects
+created by a probe when practical, and do not hide cleanup failures.
+
+## Connector 2.2.0 differential validation
+
+The earlier live results used connector 2.1.16 and remain historical evidence.
+The 2.2.0 differential application and controlled TLS checks passed on
+2026-10-17; see the [sanitized evidence](../../docs/superpowers/research/2026-10-17-redshift-connector-2.2.0-live.md).
+The human-operated destroy and post-destroy resource absence checks also
+completed on 2026-10-17.
+After the human-operated deploy, use the actual endpoint hostname and the
+existing project settings. From `examples/proj1`, run:
+
+```powershell
+uv run --frozen --with redshift-connector==2.2.0 python -c "from importlib.metadata import version; print(version('redshift-connector'))"
+uv run --frozen --with redshift-connector==2.2.0 python manage.py check
+uv run --frozen --with redshift-connector==2.2.0 python manage.py migrate
+uv run --frozen --with redshift-connector==2.2.0 python manage.py inspectdb auth_group
+```
+
+Confirm a database query and a reversible ORM write/read/delete round trip;
+`check` alone does not establish a database connection. On the same connection,
+repeat table discovery, column description, and constraint lookup to exercise
+the metadata changes introduced in 2.1.17. Run both projects with the pinned
+driver and record their resolved versions and sanitized results.
+
+For TLS, verify connection with `sslmode` omitted, then with explicit
+`verify-full`, using the existing settings' `DATABASES['default']['OPTIONS']`
+before opening the connection. Record TLS settings and any warning without
+logging the password. Do not use `ssl=False`. In a separate controlled TLS
+test environment with a trusted certificate and deliberately mismatched
+hostname, verify these 2.2.0 expectations:
+
+| sslmode | Hostname matches | Hostname mismatches |
+| --- | --- | --- |
+| omitted | connect | warn and connect |
+| `verify-full` | connect | reject |
+| `verify-ca` | connect | connect (chain still verified) |
+
+An untrusted certificate must still be rejected. The CDK environment supplies
+an AWS endpoint, not a deliberate certificate mismatch; do not interpret its
+successful connection as coverage of the mismatch cases. Record unexecuted
+cases as pending. Destroy and verify absence after the AWS session as below.
+
+## Destroy and verify
+
+Destroy is required after success, failure, or an interrupted investigation.
+From the repository root:
+
+```powershell
+Push-Location examples/cdk
+cdk destroy
+Pop-Location
+```
+
+Use the names printed by deploy to confirm removal. Both commands must report
+not found:
+
+```powershell
+aws redshift-serverless get-workgroup --workgroup-name django-redshift-live-workgroup
+aws redshift-serverless get-namespace --namespace-name django-redshift-live-namespace
+```
+
+Also inspect Serverless snapshots and the CloudFormation console for retained
+resources. A changed public IP requires another `cdk deploy`. If VPC Block
+Public Access rejects creation, inspect the account policy rather than
+weakening it in this app. An interrupted deploy, failed validation, or failed
+destroy still requires `cdk destroy`; retained resources are a release blocker
+and require manual cleanup.
+After removal, delete the local assembly and clear credentials:
+
+```powershell
+Remove-Item -Recurse -Force examples/cdk/cdk.out
+Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+```
+
+The usage limit turns off user queries after 8 RPU-hours per day, and the
+workgroup maximum is 8 RPU. These controls limit cost but do not replace prompt
+destruction.
