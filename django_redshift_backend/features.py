@@ -89,7 +89,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_on_delete_db_default = False
     supports_on_delete_db_null = False
     supports_paramstyle_pyformat = False
-    supports_inspectdb = False
+    supports_inspectdb = True
 
     supported_explain_formats = set()
     nulls_order_largest = True
